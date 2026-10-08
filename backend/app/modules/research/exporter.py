@@ -17,6 +17,8 @@ from openpyxl.styles import Font
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.modules.research import parsing
+
 LEAD_HEADERS = [
     "Lead ID",
     "Business name",
@@ -115,11 +117,29 @@ def _headers(template: list[str], tenant_name: str) -> list[str]:
 
 
 def _status_text(row: Any) -> str:
-    return (
-        (row["outreach_status_raw"] or row["outreach_status"].replace("_", " ").capitalize())
-        if row["outreach_status"]
-        else ""
-    )
+    """The current outreach status. The imported wording is used only while it still says the same thing."""
+    current = row["outreach_status"]
+    if not current:
+        return ""
+    raw = row["outreach_status_raw"]
+    if raw and parsing.slug(raw) == current:
+        return str(raw)
+    return str(current).replace("_", " ").capitalize()
+
+
+def _channel_text(row: Any) -> str | None:
+    """The current recommended channel, in the imported wording while that is unchanged."""
+    raw, preferred = row["channel_recommendation_raw"], row["preferred_channel"]
+    if raw:
+        parsed = parsing.parse_channel_recommendation(raw)
+        if parsed.preferred == preferred and parsed.instruction == row["channel_instruction"]:
+            return str(raw)
+    if not preferred:
+        return str(raw) if raw else None
+    label = str(preferred).replace("_", " ").capitalize()
+    fallbacks = "".join(f", then {f.replace('_', ' ')}" for f in (row["fallback_channels"] or []) if f != preferred)
+    instruction = f" ({row['channel_instruction']})" if row["channel_instruction"] else ""
+    return f"{label}{fallbacks}{instruction}"
 
 
 def _tags_text(row: Any) -> str | None:
@@ -202,7 +222,7 @@ def build_export(
             row["proposed_benefit"],
             row["outreach_opening"],
             row["discovery_question"],
-            row["channel_recommendation_raw"],
+            _channel_text(row),
             row["total"],
             row["tier"],
             row["confidence"] if row["confidence"] and row["confidence"] != "unknown" else None,

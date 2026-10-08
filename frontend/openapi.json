@@ -5094,6 +5094,18 @@
             "title": "Is Stale",
             "type": "boolean"
           },
+          "last_outcome_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Outcome At"
+          },
           "lead_id": {
             "format": "uuid",
             "title": "Lead Id",
@@ -5455,6 +5467,7 @@
           "restriction_reasons",
           "next_follow_up_at",
           "open_follow_ups",
+          "last_outcome_at",
           "needs_verification",
           "actions",
           "user_edited_fields",
@@ -5695,6 +5708,18 @@
           "is_stale": {
             "title": "Is Stale",
             "type": "boolean"
+          },
+          "last_outcome_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Outcome At"
           },
           "lead_id": {
             "format": "uuid",
@@ -6028,6 +6053,7 @@
           "restriction_reasons",
           "next_follow_up_at",
           "open_follow_ups",
+          "last_outcome_at",
           "needs_verification",
           "actions",
           "user_edited_fields"
@@ -6052,6 +6078,13 @@
           "requested_size": {
             "title": "Requested Size",
             "type": "integer"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
           },
           "shortfall": {
             "title": "Shortfall",
@@ -6082,6 +6115,7 @@
           "timezone",
           "requested_size",
           "tie_break",
+          "rules",
           "shortfall",
           "shortfall_reason",
           "entries"

@@ -46,6 +46,14 @@ export function TodayPage() {
             <p className="muted">
               Due follow-ups first, then phone-first prospects by score. Ties: {queue.data.tie_break}.
             </p>
+            <details>
+              <summary>How the queue moves on</summary>
+              <ul>
+                {queue.data.rules.map((rule) => (
+                  <li key={rule}>{rule}</li>
+                ))}
+              </ul>
+            </details>
             {queue.data.shortfall_reason ? (
               <p className="notice notice-warn" role="note">
                 {queue.data.shortfall_reason}

@@ -378,6 +378,38 @@ def test_formula_injection_text_is_kept_as_text_in_and_out(owner: TestClient) ->
     assert "export.prospects" in [e["action"] for e in ok(owner.get(f"{API}/audit-events"))["items"]]
 
 
+def test_export_shows_the_current_status_and_channel_not_the_imported_text(owner: TestClient) -> None:
+    import_and_commit(owner, workbook_bytes([lead_row("T-001", "Salon Aurora"), lead_row("T-002", "Vet Clinic")]))
+    leads = {item["external_id"]: item for item in ok(owner.get(f"{API}/leads"))["items"]}
+
+    def exported() -> dict[str, dict[str, Any]]:
+        sheet = openpyxl.load_workbook(io.BytesIO(owner.get(f"{API}/exports/prospects.xlsx").content))[
+            "All qualified leads"
+        ]
+        header = [c.value for c in sheet[1]]
+        return {r[0]: dict(zip(header, r, strict=True)) for r in sheet.iter_rows(min_row=2, values_only=True)}
+
+    before = exported()
+    assert before["T-001"]["Outreach status"] == "Not contacted"  # unchanged: the imported wording
+    assert before["T-001"]["Recommended contact channel"] == "Email, then phone"
+
+    detail = ok(owner.get(f"{API}/prospects/{leads['T-001']['id']}"))
+    phone = next(c for c in detail["channels"] if c["kind"] == "phone")
+    call = ok(owner.post(f"{API}/prospects/{leads['T-001']['id']}/calls", json={"channel_id": phone["id"]}), 201)
+    ok(owner.post(f"{API}/calls/{call['id']}/outcome", json={"outcome": "connected"}))
+    ok(
+        owner.patch(
+            f"{API}/prospects/{leads['T-001']['id']}/assessment",
+            json={"preferred_channel": "phone", "channel_instruction": "ask for the owner"},
+        )
+    )
+    after = exported()
+    assert after["T-001"]["Outreach status"] == "Contacted"
+    assert after["T-001"]["Recommended contact channel"] == "Phone (ask for the owner)"
+    assert after["T-002"]["Outreach status"] == "Not contacted"
+    assert after["T-002"]["Recommended contact channel"] == "Email, then phone"
+
+
 def test_formulas_are_never_evaluated_and_missing_caches_are_reported(owner: TestClient) -> None:
     wb = openpyxl.Workbook()
     ws = wb.active

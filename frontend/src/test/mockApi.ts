@@ -137,6 +137,7 @@ export function makeProspect(overrides: Record<string, unknown> = {}) {
     restriction_reasons: null,
     next_follow_up_at: null,
     open_follow_ups: 0,
+    last_outcome_at: null,
     needs_verification: ["unverified_high_priority"],
     actions: {
       call: { available: true, reason: null },
@@ -153,6 +154,7 @@ export function makeQueue(entries: Record<string, unknown>[] = [], extra: Record
     timezone: "Europe/Sofia",
     requested_size: 25,
     tie_break: "score (high to low), confidence, most recently checked, Lead ID",
+    rules: ["A follow-up that is due comes first, whatever happened before."],
     shortfall: 0,
     shortfall_reason: null,
     entries,

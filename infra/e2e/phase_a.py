@@ -102,6 +102,30 @@ def main() -> None:
     kinds = [a["kind"] for a in ok(rep.get("/api/v1/activities", params={"lead_id": first["lead_id"]}))["items"]]
     check("call.reported" in kinds and "lead.imported" in kinds, "history shows the import and the reported call")
 
+    print("The queue moves on as calls are reported")
+    waiting = [e["prospect"] for e in queue["entries"][1:4]]
+
+    def report(prospect: dict, **outcome) -> None:
+        number = next(c for c in ok(rep.get(f"/api/v1/prospects/{prospect['lead_id']}"))["channels"] if c["dial_uri"])
+        attempt = ok(rep.post(f"/api/v1/prospects/{prospect['lead_id']}/calls", json={"channel_id": number["id"]}), 201)
+        ok(rep.post(f"/api/v1/calls/{attempt['id']}/outcome", json=outcome))
+
+    report(waiting[0], outcome="connected")
+    report(waiting[1], outcome="no_answer")
+    report(waiting[2], outcome="follow_up_requested", follow_up_at=(datetime.now(UTC) + timedelta(days=2)).isoformat())
+    today_ids = [e["prospect"]["lead_id"] for e in ok(rep.get("/api/v1/call-queue"))["entries"]]
+    check(not {p["lead_id"] for p in waiting} & set(today_ids), "prospects handled today left today's queue")
+    check(today_ids[0] == first["lead_id"], "the due follow-up still leads the queue")
+    tomorrow_ids = [e["prospect"]["lead_id"] for e in ok(rep.get("/api/v1/call-queue", params={"day": "tomorrow"}))["entries"]]
+    check(waiting[1]["lead_id"] in tomorrow_ids, "the unanswered call returns tomorrow")
+    check(waiting[0]["lead_id"] not in tomorrow_ids, "the prospect who was reached does not return to the cold-call queue")
+    check(waiting[2]["lead_id"] not in tomorrow_ids, "the prospect with a later follow-up waits for that day")
+
+    print("Convert a prospect to an opportunity")
+    deal = ok(rep.post(f"/api/v1/leads/{waiting[0]['lead_id']}/convert", json={"title": "Online booking", "amount": "1500.00"}), 201)
+    check(deal["currency"] == "EUR" and deal["stage_kind"] == "open", "conversion created an open opportunity in EUR")
+    check(ok(rep.get(f"/api/v1/prospects/{waiting[0]['lead_id']}"))["status"] == "converted", "the lead is marked converted")
+
     print("Verification and review")
     pending = ok(owner.get("/api/v1/prospects", params={"needs_verification": True, "limit": 1}))["total"]
     check(pending > 0, f"{pending} prospects wait for verification (imported research is unverified)")

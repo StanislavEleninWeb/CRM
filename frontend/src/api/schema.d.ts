@@ -2862,6 +2862,8 @@ export interface components {
             industry_group: string | null;
             /** Is Stale */
             is_stale: boolean;
+            /** Last Outcome At */
+            last_outcome_at: string | null;
             /**
              * Lead Id
              * Format: uuid
@@ -2988,6 +2990,8 @@ export interface components {
             industry_group: string | null;
             /** Is Stale */
             is_stale: boolean;
+            /** Last Outcome At */
+            last_outcome_at: string | null;
             /**
              * Lead Id
              * Format: uuid
@@ -3062,6 +3066,8 @@ export interface components {
             queue_date: string;
             /** Requested Size */
             requested_size: number;
+            /** Rules */
+            rules: string[];
             /** Shortfall */
             shortfall: number;
             /** Shortfall Reason */

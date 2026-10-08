@@ -211,6 +211,7 @@ export function ProspectPage() {
       </section>
 
       <ScoreSection prospect={p} />
+      {can("crm.write") && p.status !== "disqualified" ? <OwnerAndConvert prospect={p} onDone={refresh} /> : null}
       {can("research.review") && p.status !== "disqualified" ? <DismissForm leadId={leadId} onDone={refresh} /> : null}
 
       <section className="panel" aria-labelledby="calls-heading">
@@ -544,5 +545,97 @@ function DismissForm({ leadId, onDone }: { leadId: string; onDone: () => Promise
       </form>
       {dismiss.isError ? <ErrorState error={dismiss.error} /> : null}
     </details>
+  );
+}
+
+function OwnerAndConvert({ prospect, onDone }: { prospect: Detail; onDone: () => Promise<void> }) {
+  const { can, me } = useAuth();
+  const navigate = useNavigate();
+  const members = useTenantQuery(["members"], () => unwrap(api.GET("/api/v1/members", { params: { query: { limit: 200 } } })));
+  const [title, setTitle] = useState(prospect.recommended_service_raw ?? prospect.service_category ?? "");
+  const [amount, setAmount] = useState("");
+  const ids = { owner: useId(), title: useId(), amount: useId() };
+  const assign = useMutation({
+    mutationFn: (ownerId: string) =>
+      unwrap(
+        api.PATCH("/api/v1/prospects/{lead_id}/owner", {
+          params: { path: { lead_id: prospect.lead_id }, query: ownerId ? { owner_user_id: ownerId } : {} },
+        }),
+      ),
+    onSuccess: onDone,
+  });
+  const convert = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST("/api/v1/leads/{lead_id}/convert", {
+          params: { path: { lead_id: prospect.lead_id } },
+          body: { title, amount: amount || null },
+        }),
+      ),
+    onSuccess: async () => {
+      await onDone();
+      navigate("/opportunities");
+    },
+  });
+  // A representative may take a prospect; handing it to someone else needs the assign permission.
+  const options = (members.data?.items ?? []).filter((member) => can("crm.assign") || member.user_id === me.user.id);
+
+  return (
+    <section className="panel" aria-labelledby="next-steps-heading">
+      <h2 id="next-steps-heading">Owner and next step</h2>
+      <div className="field">
+        <label htmlFor={ids.owner}>Owner</label>
+        <select
+          id={ids.owner}
+          value={prospect.owner_user_id ?? ""}
+          disabled={assign.isPending || members.isPending}
+          onChange={(event) => assign.mutate(event.target.value)}
+        >
+          <option value="">Unassigned</option>
+          {prospect.owner_user_id && !options.some((m) => m.user_id === prospect.owner_user_id) ? (
+            <option value={prospect.owner_user_id}>Assigned to a colleague</option>
+          ) : null}
+          {options.map((member) => (
+            <option key={member.user_id} value={member.user_id}>
+              {member.user_id === me.user.id ? "Me" : member.display_name || member.email}
+            </option>
+          ))}
+        </select>
+      </div>
+      {assign.isError ? <ErrorState error={assign.error} /> : null}
+      {prospect.status === "converted" ? (
+        <p>
+          This prospect became an opportunity. <Link to="/opportunities">Open opportunities</Link>
+        </p>
+      ) : (
+        <form
+          className="inline-form"
+          aria-label="Convert to opportunity"
+          onSubmit={(event) => {
+            event.preventDefault();
+            convert.mutate();
+          }}
+        >
+          <div className="field">
+            <label htmlFor={ids.title}>Opportunity</label>
+            <input id={ids.title} required maxLength={300} value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor={ids.amount}>Expected value ({me.active_tenant?.currency}, optional)</label>
+            <input
+              id={ids.amount}
+              inputMode="decimal"
+              pattern="[0-9]+([.][0-9]{1,2})?"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <button type="submit" className="button" disabled={convert.isPending}>
+            Convert to opportunity
+          </button>
+        </form>
+      )}
+      {convert.isError ? <ErrorState error={convert.error} /> : null}
+    </section>
   );
 }

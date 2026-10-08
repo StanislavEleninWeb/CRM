@@ -341,6 +341,37 @@ describe("prospect page", () => {
     expect(body.do_not_call).toBe(false);
   });
 
+  it("lets a representative take the prospect and convert it to an opportunity", async () => {
+    const calls = mockApi({
+      "GET /api/v1/auth/me": me,
+      "GET /api/v1/prospects/lead-1": () => json(detail()),
+      "GET /api/v1/members": () =>
+        json(
+          page([
+            { user_id: "user-1", email: "owner@example.test", display_name: "Olga Owner", role: "representative", joined_at: "2026-10-08T10:00:00Z" },
+            { user_id: "user-2", email: "other@example.test", display_name: "Otto Other", role: "owner", joined_at: "2026-10-08T10:00:00Z" },
+          ]),
+        ),
+      "PATCH /api/v1/prospects/lead-1/owner": () => json(detail({ owner_user_id: "user-1" })),
+      "POST /api/v1/leads/lead-1/convert": () => json({ id: "deal-1" }, 201),
+      "GET /api/v1/pipelines": () => json([]),
+    });
+    renderAt("/prospects/lead-1");
+    const owner = await screen.findByLabelText("Owner");
+    await waitFor(() => expect(screen.getByRole("option", { name: "Me" })).toBeInTheDocument());
+    // Without the assign permission only "Me" is offered, never a colleague.
+    expect(screen.queryByRole("option", { name: "Otto Other" })).not.toBeInTheDocument();
+    await userEvent.selectOptions(owner, "user-1");
+    await waitFor(() => expect(calls.some((call) => call.method === "PATCH")).toBe(true));
+
+    const title = screen.getByLabelText("Opportunity");
+    expect(title).toHaveValue("Online booking");
+    await userEvent.type(screen.getByLabelText(/Expected value \(EUR/), "1500");
+    await userEvent.click(screen.getByRole("button", { name: "Convert to opportunity" }));
+    await waitFor(() => expect(calls.some((call) => call.path.endsWith("/convert"))).toBe(true));
+    expect(calls.find((call) => call.path.endsWith("/convert"))?.body).toEqual({ title: "Online booking", amount: "1500" });
+  });
+
   it("offers no call button to a read-only member or for a dismissed prospect", async () => {
     mockApi({
       "GET /api/v1/auth/me": me,

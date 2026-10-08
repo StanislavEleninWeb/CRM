@@ -43,6 +43,13 @@ follow_ups AS (
     WHERE tenant_id = :tenant_id AND status = 'open' AND kind IN ('call', 'follow_up') AND lead_id IS NOT NULL
     GROUP BY lead_id
 ),
+reported AS (
+    -- A wrong number says nothing about the prospect, so it does not count as having reached them.
+    SELECT lead_id, max(outcome_reported_at) AS last_outcome_at
+    FROM call_attempts
+    WHERE tenant_id = :tenant_id AND outcome IS NOT NULL AND outcome <> 'wrong_number' AND lead_id IS NOT NULL
+    GROUP BY lead_id
+),
 p AS (
     SELECT l.id AS lead_id, l.external_id, l.status, l.outreach_status, l.owner_user_id, l.next_action,
            l.next_action_at, l.company_id, l.disqualify_reason,
@@ -60,7 +67,7 @@ p AS (
            CASE WHEN COALESCE(r.email_blocked, false) THEN 0 ELSE COALESCE(e.email_count, 0) END AS email_count,
            COALESCE(r.phone_blocked, false) AS phone_blocked, COALESCE(r.email_blocked, false) AS email_blocked,
            r.reasons AS restriction_reasons,
-           f.next_follow_up_at, COALESCE(f.open_follow_ups, 0) AS open_follow_ups,
+           f.next_follow_up_at, COALESCE(f.open_follow_ups, 0) AS open_follow_ups, rep.last_outcome_at,
            (a.checked_on IS NULL OR a.checked_on < :stale_before) AS is_stale,
            (SELECT array_agg(t.name::text ORDER BY t.name::text) FROM taggings tg
             JOIN tags t ON t.tenant_id = tg.tenant_id AND t.id = tg.tag_id
@@ -82,6 +89,7 @@ p AS (
     LEFT JOIN phones ph ON ph.company_id = l.company_id
     LEFT JOIN emails e ON e.company_id = l.company_id
     LEFT JOIN follow_ups f ON f.lead_id = l.id
+    LEFT JOIN reported rep ON rep.lead_id = l.id
     WHERE l.tenant_id = :tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
 )
 """
@@ -152,3 +160,21 @@ def actions(row: Any, *, can_call: bool, mailbox_connected: bool = False) -> dic
         "call": {"available": call_ok, "reason": call_reason},
         "email": {"available": email_ok, "reason": email_reason},
     }
+
+
+# How the call queue moves on during and across calling days.
+QUEUE_RULES = (
+    "A follow-up that is due comes first, whatever happened before.",
+    "A prospect with a follow-up booked for a later day waits until that day.",
+    "A prospect whose call outcome was reported today is not offered again today.",
+    "A prospect you have spoken to (connected) leaves the cold-call queue; continue through its follow-up or opportunity.",
+    "Unanswered calls (no answer, busy, voicemail) return on a later day.",
+    "After a wrong number the prospect stays in the queue if another number may be called.",
+)
+# Applies to prospects that are not due for a follow-up. Needs :start_of_day and :end_of_day.
+QUEUE_NOT_YET_HANDLED_SQL = """(
+    (p.next_follow_up_at IS NULL OR p.next_follow_up_at < :end_of_day)
+    AND (p.last_outcome_at IS NULL OR p.last_outcome_at < :start_of_day)
+    AND p.outreach_status <> 'contacted'
+)"""
+FOLLOW_UP_DUE_SQL = "(p.next_follow_up_at IS NOT NULL AND p.next_follow_up_at < :end_of_day)"

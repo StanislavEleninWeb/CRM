@@ -29,6 +29,20 @@ Status values: **Confirmed** (the owner said so), **Default** (working default f
 | F-08 | Backend runs on a pinned Python 3.13 image; the host's Python 3.14 is not used for the app | Library support for 3.14 is not assumed |
 | F-09 | Shortlist size 25, due-row poll interval 30 seconds, mailbox reconciliation every 15 minutes; all configurable | Build pack |
 
+## Call queue rules (phase 05)
+
+Decided while testing the queue on real data; shown to users under "How the queue moves on".
+
+| Situation | Behaviour |
+|---|---|
+| A follow-up is due | First in the queue, whatever happened before |
+| A follow-up is booked for a later day | Waits until that day |
+| A call outcome was reported today | Not offered again today |
+| Connected, nothing booked | Leaves the cold-call queue; work continues through a follow-up or an opportunity |
+| No answer, busy, voicemail | Returns on a later day |
+| Wrong number | Stays in the queue if another number may be called |
+| Dialler opened, no outcome reported | Stays in the queue: nothing is known to have happened |
+
 ## Unresolved
 
 | # | Choice | Blocks | Needed by |

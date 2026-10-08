@@ -278,10 +278,7 @@ def test_call_queue_puts_due_follow_ups_first_then_phone_first_prospects(owner: 
     ]
     # P-005 has no phone and P-006 only an emergency line: neither is offered for calling.
     assert queue["requested_size"] == 25 and queue["shortfall"] == 21
-    assert (
-        queue["shortfall_reason"]
-        == "Only 4 prospects with a number that may be called are available. The list is not padded."
-    )
+    assert queue["shortfall_reason"] == "Only 4 prospects are left to call for this day. The list is not padded."
     assert "score (high to low)" in queue["tie_break"] and queue["timezone"] == "Europe/Sofia"
     blocked = by_id(owner)
     assert blocked["P-005"]["actions"]["call"] == {"available": False, "reason": "no_phone_found"}
@@ -341,6 +338,44 @@ def test_shortlist_snapshots_are_dated_in_the_tenant_time_zone_and_keep_their_sc
     # "Tomorrow" in one zone can be the same calendar date as "today" in another, in which case it is reused.
     assert listed["total"] in (3, 4) and all(s["origin"] == "generated" for s in listed["items"])
     assert ok(owner.get(f"{API}/leads"))["total"] == 2  # a shortlist is a view, not more leads
+
+
+def test_call_queue_moves_on_as_calls_are_reported(rep: TestClient, owner: TestClient, migrator_engine: Any) -> None:
+    import_and_commit(owner, workbook_bytes([row(f"P-00{i}", f"Company {i}", 95 - i) for i in range(1, 7)]))
+
+    def queue(day: str = "today") -> list[str]:
+        return [e["prospect"]["external_id"] for e in ok(rep.get(f"{API}/call-queue", params={"day": day}))["entries"]]
+
+    def report(external_id: str, **outcome: Any) -> None:
+        lead = by_id(rep)[external_id]["lead_id"]
+        phone = next(c for c in ok(rep.get(f"{API}/prospects/{lead}"))["channels"] if c["kind"] == "phone")
+        call = ok(rep.post(f"{API}/prospects/{lead}/calls", json={"channel_id": phone["id"]}), 201)
+        ok(rep.post(f"{API}/calls/{call['id']}/outcome", json=outcome))
+
+    assert queue() == ["P-001", "P-002", "P-003", "P-004", "P-005", "P-006"]
+    report("P-001", outcome="connected")  # spoken to, nothing booked
+    report("P-002", outcome="no_answer")
+    in_two_days = (datetime.now(UTC) + timedelta(days=2)).isoformat()
+    report("P-003", outcome="follow_up_requested", follow_up_at=in_two_days)
+    report("P-004", outcome="voicemail", follow_up_at=(datetime.now(UTC) - timedelta(minutes=1)).isoformat())
+    # Opening the dialler without reporting anything does not remove a prospect.
+    lead5 = by_id(rep)["P-005"]["lead_id"]
+    phone5 = next(c for c in ok(rep.get(f"{API}/prospects/{lead5}"))["channels"] if c["kind"] == "phone")
+    ok(rep.post(f"{API}/prospects/{lead5}/calls", json={"channel_id": phone5["id"]}), 201)
+
+    assert queue() == ["P-004", "P-005", "P-006"]  # the due follow-up first; handled prospects are gone
+    rules = ok(rep.get(f"{API}/call-queue"))["rules"]
+    assert any("not offered again today" in rule for rule in rules) and len(rules) == 6
+    # Tomorrow: the unanswered call returns; the connected one and the later follow-up do not.
+    assert queue("tomorrow") == ["P-004", "P-002", "P-005", "P-006"]
+
+    # Once the later follow-up falls due it leads the queue, even though the prospect was spoken to.
+    tenant = ok(owner.get(f"{API}/tenant"))["id"]
+    with migrator_engine.begin() as conn:
+        conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant})
+        conn.execute(text("UPDATE tasks SET due_at = now() - interval '2 minutes' WHERE status = 'open'"))
+    assert queue()[:2] == ["P-003", "P-004"] or queue()[:2] == ["P-004", "P-003"]
+    assert "P-001" not in queue() and "P-002" not in queue()
 
 
 # --- calls -----------------------------------------------------------------------------------

@@ -12,6 +12,8 @@ x-backend: &backend
     - ./backend:/app
     - ./tests/fixtures:/fixtures:ro
     - ./infra:/infra:ro
+    # Read-only view of the repository, used by the test that checks no private data was committed.
+    - .:/repo:ro
   depends_on:
     db: {condition: service_healthy}
     redis: {condition: service_healthy}

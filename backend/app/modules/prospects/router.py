@@ -108,6 +108,7 @@ class ProspectOut(BaseModel):
     restriction_reasons: str | None
     next_follow_up_at: datetime | None
     open_follow_ups: int
+    last_outcome_at: datetime | None
     needs_verification: list[str]
     actions: dict[str, ActionState]
     user_edited_fields: list[str] | None
@@ -245,6 +246,7 @@ class QueueOut(BaseModel):
     timezone: str
     requested_size: int
     tie_break: str
+    rules: list[str]
     shortfall: int
     shortfall_reason: str | None
     entries: list[ShortlistEntryOut]
@@ -838,8 +840,9 @@ def _queue_rows(
 ) -> tuple[list[tuple[RowMapping, str]], int]:
     """Select and order the queue for a date. Returns ``(rows with reason, eligible count)``."""
     tz = ZoneInfo(settings["timezone"])
+    start_of_day = datetime.combine(queue_date, time.min, tzinfo=tz)
     end_of_day = datetime.combine(queue_date + timedelta(days=1), time.min, tzinfo=tz)
-    params = {**_base_params(ctx, settings), "end_of_day": end_of_day, "limit": settings["shortlist_size"]}
+    params = {**_base_params(ctx, settings), "limit": settings["shortlist_size"]}
     if kind == "score_ranked":
         condition = f"p.total IS NOT NULL AND {q.ACTIVE_PROSPECT_SQL}"
         rows = many(
@@ -848,9 +851,12 @@ def _queue_rows(
         eligible = scalar(ctx, f"{q.PROSPECTS_CTE} SELECT count(*) FROM p WHERE {condition}", params)
         return [(r, "ranked_by_score") for r in rows], eligible
     # Call queue: due follow-ups first, then phone-first prospects, then everyone else who can be called.
-    condition = f"p.dialable_count > 0 AND {q.ACTIVE_PROSPECT_SQL}"
-    bucket = """
-        CASE WHEN p.next_follow_up_at IS NOT NULL AND p.next_follow_up_at < :end_of_day THEN 0
+    params |= {"start_of_day": start_of_day, "end_of_day": end_of_day}
+    condition = (
+        f"p.dialable_count > 0 AND {q.ACTIVE_PROSPECT_SQL} AND ({q.FOLLOW_UP_DUE_SQL} OR {q.QUEUE_NOT_YET_HANDLED_SQL})"
+    )
+    bucket = f"""
+        CASE WHEN {q.FOLLOW_UP_DUE_SQL} THEN 0
              WHEN p.preferred_channel = 'phone' THEN 1 ELSE 2 END
     """
     rows = many(
@@ -884,8 +890,12 @@ def _entries(ctx: TenantContext, rows: list[tuple[RowMapping, str]]) -> list[Sho
 def _shortfall(requested: int, got: int, eligible: int, kind: str) -> tuple[int, str | None]:
     if got >= requested:
         return 0, None
-    what = "prospects with a number that may be called" if kind == "call_queue" else "scored, active prospects"
-    return requested - got, f"Only {eligible} {what} are available. The list is not padded."
+    what = "prospects are left to call for this day" if kind == "call_queue" else "scored, active prospects"
+    return requested - got, (
+        f"Only {eligible} {what}. The list is not padded."
+        if kind == "call_queue"
+        else f"Only {eligible} {what} are available. The list is not padded."
+    )
 
 
 @router.get("/call-queue", response_model=QueueOut, operation_id="getCallQueue", tags=["queue"])
@@ -900,6 +910,7 @@ def call_queue(ctx: TenantContext = READ, day: Literal["today", "tomorrow"] = "t
         timezone=settings["timezone"],
         requested_size=settings["shortlist_size"],
         tie_break=q.TIE_BREAK,
+        rules=list(q.QUEUE_RULES),
         shortfall=shortfall,
         shortfall_reason=reason,
         entries=_entries(ctx, rows),

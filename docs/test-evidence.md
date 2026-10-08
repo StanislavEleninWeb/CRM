@@ -194,5 +194,16 @@ What the tests cover:
 - The handoff check and the restore exercise ran on a developer machine. A hosted pilot still needs host-specific security and deployment checks (U-07); this is a local prototype, not a production deployment.
 - Calls are user-reported. Nothing confirms that a call connected or how long it lasted.
 - The verification queue rules are fixed (low confidence, stale, contradicted, unverified Tier A); only the freshness window is configurable.
-- Lead conversion to an opportunity and lead-level notes are available on the company page and through the API; the prospect page links there rather than duplicating them.
+- Lead-level notes are added on the company page; the prospect page links there.
 - Accessibility was checked through semantic queries in tests (roles, labels, names) and tap-target size; no screen-reader session or automated contrast audit was run.
+
+### Phase 05 corrections after review — 8 October 2026
+
+| Finding | Fix | Evidence |
+|---|---|---|
+| Real phone numbers, a place ID and a listing ID from the private workbook had been copied into tests and code comments in the unpushed commits | Replaced with synthetic values in every commit of `main..build/core`; old objects pruned. Nothing had been pushed. | A scan of tracked files and of that history against 620 identifying workbook values finds none. `tests/test_no_private_data.py` repeats the scan on every local run. |
+| The call queue did not move on: a prospect just spoken to, or with a follow-up booked for later, stayed at its rank | Queue rules added (see `decisions.md`) and shown on the Today page | `test_call_queue_moves_on_as_calls_are_reported`; added to `infra/e2e/phase_a.py` |
+| An earlier version of this document said lead conversion was available on the company page. It was not available in any screen. | Owner assignment and "Convert to opportunity" added to the prospect page | Frontend test; conversion added to `infra/e2e/phase_a.py` |
+| The export showed the outreach status and recommended channel as imported, even after they changed | The export shows current values and uses the imported wording only while it still means the same | `test_export_shows_the_current_status_and_channel_not_the_imported_text` |
+
+After these fixes: backend 159 passed (reference workbook present), frontend 19 passed, phase A end-to-end check passed on a fresh stack.
