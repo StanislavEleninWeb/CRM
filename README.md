@@ -24,6 +24,8 @@ This copies `.env.example` to `.env` if needed, builds the images, applies migra
 
 PostgreSQL and Redis are reachable only from inside the Compose network.
 
+Sign in with one of the development users, for example `owner@example.test`, password `dev-password`. These exist only in the bundled development identity provider (`infra/dex/config.dev.yaml`).
+
 ## Commands
 
 | Command | What it does |

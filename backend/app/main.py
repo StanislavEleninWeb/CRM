@@ -7,6 +7,8 @@ from app.core.config import get_settings
 from app.core.errors import ErrorEnvelope, register_error_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import CorrelationMiddleware
+from app.modules.identity.auth_router import router as auth_router
+from app.modules.identity.tenant_router import router as tenant_router
 from app.modules.system.router import api_router as system_api_router
 from app.modules.system.router import router as health_router
 
@@ -40,6 +42,8 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     v1 = APIRouter(prefix=API_PREFIX)
     v1.include_router(system_api_router)
+    v1.include_router(auth_router)
+    v1.include_router(tenant_router)
     app.include_router(v1)
     return app
 

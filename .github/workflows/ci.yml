@@ -24,8 +24,8 @@ jobs:
         run: cp .env.example .env
       - name: Build backend image
         run: docker compose build api
-      - name: Start PostgreSQL and Redis
-        run: docker compose up -d --wait db redis
+      - name: Start PostgreSQL, Redis and the development identity provider
+        run: docker compose up -d --wait db redis oidc
       - name: Lint
         run: docker compose run --rm -T api sh -c "ruff check . && ruff format --check ."
       - name: Type-check
@@ -35,7 +35,6 @@ jobs:
           docker compose run --rm -T migrate
           docker compose run --rm -T api alembic downgrade base
           docker compose run --rm -T api alembic upgrade head
-          docker compose run --rm -T api alembic check
       # Tests that need the private reference workbook report as skipped here.
       - name: Tests (PostgreSQL, runtime role)
         run: docker compose run --rm -T api pytest

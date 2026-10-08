@@ -14,12 +14,13 @@ dependencies = [
     "celery[redis]>=5.5",
     "redis>=5.2",
     "structlog>=24.4",
+    "pyjwt[crypto]>=2.10",
+    "httpx>=0.27",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.27",
     "ruff>=0.8",
     "mypy>=1.13",
 ]
@@ -35,9 +36,12 @@ target-version = "py313"
 select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
 ignore = ["S101"]
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["app.core.deps.tenant_with", "fastapi.Depends", "fastapi.Query"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S608"]
-"migrations/**" = ["S608"]
+"migrations/**" = ["S608", "E501"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -58,5 +62,5 @@ testpaths = ["tests"]
 markers = [
     "reference_fixture: needs the private reference workbook; skipped when it is absent",
 ]
-addopts = "-ra"
+addopts = "-ra --show-capture=no --tb=short"
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

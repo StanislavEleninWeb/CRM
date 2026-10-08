@@ -1,10 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { ApiError } from "./api/client";
+import { AuthProvider, useAuth, useMeQuery } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
+import { ErrorState, Loading } from "./components/States";
+import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
+import { AccountPage } from "./pages/AccountPage";
+import { LoginPage } from "./pages/LoginPage";
+import { NewWorkspacePage } from "./pages/NewWorkspacePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { TeamPage } from "./pages/TeamPage";
 import { TodayPage } from "./pages/TodayPage";
 
 export function createQueryClient() {
@@ -19,14 +26,51 @@ export function createQueryClient() {
   });
 }
 
+/** Pages that need a workspace send users without one to create it first. */
+function RequireWorkspace({ children }: { children: React.ReactNode }) {
+  const { tenantId } = useAuth();
+  return tenantId === null ? <Navigate to="/workspaces/new" replace /> : children;
+}
+
 export function AppRoutes() {
+  const me = useMeQuery();
+  const location = useLocation();
+  const signedOut = me.error instanceof ApiError && me.error.status === 401;
+
+  if (location.pathname === "/invitations/accept") {
+    if (me.isPending) return <Loading label="Loading" />;
+    return <AcceptInvitationPage me={me.data ?? null} />;
+  }
+  if (me.isPending) return <Loading label="Loading" />;
+  if (signedOut) return <LoginPage />;
+  if (me.isError) return <ErrorState error={me.error} onRetry={() => void me.refetch()} />;
+
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<TodayPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+    <AuthProvider me={me.data}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route
+            index
+            element={
+              <RequireWorkspace>
+                <TodayPage />
+              </RequireWorkspace>
+            }
+          />
+          <Route
+            path="team"
+            element={
+              <RequireWorkspace>
+                <TeamPage />
+              </RequireWorkspace>
+            }
+          />
+          <Route path="workspaces/new" element={<NewWorkspacePage />} />
+          <Route path="account" element={<AccountPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   );
 }
 

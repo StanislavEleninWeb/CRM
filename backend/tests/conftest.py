@@ -80,11 +80,48 @@ def migrator_engine(migrated_database: None) -> Iterator[object]:
     engine.dispose()
 
 
-@pytest.fixture
-def client(migrated_database: None) -> Iterator[object]:
-    from fastapi.testclient import TestClient
-
+@pytest.fixture(scope="session")
+def app(migrated_database: None) -> object:
     from app.main import create_app
 
-    with TestClient(create_app()) as test_client:
+    return create_app()
+
+
+@pytest.fixture
+def client(app: object) -> Iterator[object]:
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as test_client:  # type: ignore[arg-type]
         yield test_client
+
+
+@pytest.fixture
+def make_client(app: object) -> Iterator[object]:
+    """Independent browsers: each client has its own cookie jar."""
+    from fastapi.testclient import TestClient
+
+    clients: list[TestClient] = []
+
+    def factory() -> TestClient:
+        test_client = TestClient(app)  # type: ignore[arg-type]
+        clients.append(test_client)
+        return test_client
+
+    yield factory
+    for test_client in clients:
+        test_client.close()
+
+
+@pytest.fixture(autouse=True)
+def clean_tables(migrator_engine: object) -> Iterator[None]:
+    """Each test starts with empty tables. Runs as the schema owner."""
+    yield
+    with migrator_engine.begin() as conn:  # type: ignore[attr-defined]
+        tables = conn.execute(
+            text(
+                "SELECT string_agg(format('%I', tablename), ', ') FROM pg_tables "
+                "WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
+            )
+        ).scalar()
+        if tables:
+            conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))

@@ -7,9 +7,9 @@ Resume from here after a context reset. Do not rerun completed phases.
 | Field | Value |
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
-| Branch | `build/phase-00` (local commits only; not pushed) |
-| Last completed phase | 01 |
-| Next action | Phase 02: CRM-020 identity and sessions, then tenants, roles and row-level security |
+| Branch | `build/core` (local commits only; not pushed) |
+| Last completed phase | 02 |
+| Next action | Phase 03: CRM-030 companies, contacts, contact channels, leads and deals |
 
 ## Phases
 
@@ -17,7 +17,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|---|---|
 | 00 Scope, repository, decisions | DONE | see `git log` (`Phase 00`) | Docs only; no application code |
 | 01 Executable foundation | DONE | see `git log` (`Phase 01`) | Tenant isolation and identity are not part of this phase |
-| 02 Identity, tenancy, roles, isolation | TODO | — | |
+| 02 Identity, tenancy, roles, isolation | DONE | see `git log` (`Phase 02`) | Production identity provider and MFA verification remain BLOCKED (U-01) |
 | 03 Core CRM and history | TODO | — | |
 | 04 Research schema, scoring, import/export | TODO | — | |
 | 05 Prospect review, shortlist, calls | TODO | — | |
@@ -66,3 +66,12 @@ Pinned in `backend/uv.lock` and `frontend/pnpm-lock.yaml`; base images pinned by
 | TanStack Query / React Router | 5.104 / 7.18 |
 
 TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeScript 7.
+
+## Conventions established in phase 02
+
+- The schema is defined only by hand-written SQL migrations. Application code queries with SQL text or reflected tables (`app.core.db.table`); there are no ORM models to keep in sync.
+- Every endpoint gets its database session from `UserSession` (acts as the user, no tenant) or `Tenant` / `tenant_with(permission)` (acts inside the active tenant). Both commit before the response is sent.
+- Background jobs open their session with `app.worker.context.tenant_job(tenant_id, actor_user_id)`.
+- Frontend data that belongs to a workspace uses `useTenantQuery`, which puts the workspace ID in the cache key.
+- Identity tables use `ENABLE ROW LEVEL SECURITY`; tenant-owned business tables use `FORCE`. Pre-tenant operations go through narrow `SECURITY DEFINER` functions.
+- If a migration that was already applied locally is edited, run `make reset` before `make up`.

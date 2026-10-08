@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api, unwrap } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { EmptyState, ErrorState, Loading } from "../components/States";
 
 export function TodayPage() {
+  const { me } = useAuth();
   const info = useQuery({
     queryKey: ["system", "info"],
     queryFn: () => unwrap(api.GET("/api/v1/system/info")),
@@ -17,6 +19,7 @@ export function TodayPage() {
   return (
     <>
       <h1>Today</h1>
+      <p className="muted">{me.active_tenant?.name}</p>
       <EmptyState title="Nothing is due yet.">
         <p>Follow-ups, calls and replies that need attention will appear here.</p>
       </EmptyState>

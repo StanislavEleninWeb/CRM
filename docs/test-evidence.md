@@ -42,3 +42,38 @@ All commands ran in containers on the local machine.
 What the tests cover: readiness succeeds with database and Redis and returns 503 when the database is unreachable; the runtime role is not a superuser, cannot bypass row-level security and cannot create tables; an unset tenant resolves to `NULL`; the error envelope and correlation IDs; log redaction; settings validation; tenant-local dates; the beat schedule contains only the short polling task.
 
 **Limitations:** the GitHub Actions workflow has not run on GitHub (nothing is pushed); its steps were run locally by hand. No tenant-owned tables exist yet, so isolation is not demonstrated until phase 02.
+
+## Phase 01 addendum — clean checkout
+
+`git clone` of the local repository into an empty directory, then `make up && make smoke`: all services healthy and the smoke test passed. This confirms the documented commands work without pre-existing `.env`, `node_modules` or volumes.
+
+## Phase 02 — 8 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (PostgreSQL 17 as `crm_app`, Redis, Dex 2.46 as the identity provider) | 68 passed |
+| `ruff check`, `ruff format --check`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test` | Clean; 11 tests passed |
+| Browser walk-through on `localhost:5173` | Sign-in through Dex, workspace creation, Team page at 375 px width |
+
+What is covered:
+
+- **Sign-in:** the full authorization-code flow against a real OIDC server; state bound to the browser; callback replay; PKCE verifier mismatch (rejected by the provider); open-redirect attempts on the return path.
+- **ID token validation** with test-controlled keys: wrong issuer, wrong audience, expired, nonce mismatch or missing, missing subject or email, unknown signing key, unsigned (`alg=none`), HMAC signed with the public key, multiple audiences with a foreign `azp`, discovery document with an unexpected issuer.
+- **Sessions:** token stored only as a hash; logout, expiry, revoking other sessions; one user cannot revoke another's session; CSRF token required on unsafe methods.
+- **Isolation through the API:** two workspaces with the same name; forged tenant headers and query parameters ignored; switching to a non-member workspace refused; cross-tenant updates and deletes return 404; a member of two workspaces sees only the active one.
+- **Isolation in the database, as `crm_app`:** no context means zero rows and rejected inserts; cross-tenant inserts rejected by policy; cross-tenant updates and deletes match nothing; a row cannot be moved to another tenant; the composite foreign key refuses a link to another tenant's member; the runtime role cannot set the platform-operator flag, rewrite audit events, or insert tenants directly.
+- **Connection pool:** with a pool of one connection, context set in a failed transaction is gone on the next checkout; context survives a commit inside one unit of work.
+- **Definer functions:** need the exact token hash; expose no identifiers; refuse to create a tenant without a user.
+- **Invitations:** token shown once and stored hashed; single use; expired, revoked, unknown and wrong-email cases; a removed member loses access on the next request.
+- **Roles:** monotonic permission matrix; read-only, representative and sales manager cannot manage members or settings; nobody can escalate their own role; administrators cannot create, change or remove owners; the last owner cannot be removed or demoted, enforced by a database trigger as well.
+- **Transactions:** a failed commit produces a 500, not a success.
+- **Background jobs:** tenant required; unknown tenant refused; actor membership re-checked at execution, including removal after enqueue.
+- **Frontend:** signed-out state; onboarding with CSRF header; permission-based hiding; one-time invitation link; a delayed response from the previous workspace is not rendered after switching.
+
+**Limitations:**
+
+- Production identity provider is not chosen (U-01). The development provider does not report MFA, so MFA is recorded only as "reported by provider or not"; nothing enforces it yet.
+- Cross-tenant link tests currently cover the one tenant-aware foreign key that exists (invitation inviter). CRM relationships arrive in phase 03 and get the same tests there.
+- Invitation links are shown to the inviter to send by hand; the application sends no email.
+- There is no sign-in rate limiting yet; it is provided by the identity provider.

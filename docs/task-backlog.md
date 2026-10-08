@@ -23,10 +23,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-020 | Identity and sessions (OIDC, HttpOnly cookies, CSRF, revocation) | Issuer, audience, signature, state, nonce and PKCE validated | TODO |
-| CRM-021 | Tenants, memberships, invitations | Expired or reused invitations fail; removed members lose access | TODO |
-| CRM-022 | Roles and permission matrix | Role escalation fails; read-only cannot mutate; last owner cannot be removed | TODO |
-| CRM-023 | Row-level security isolation | Two tenants cannot cross-read, write or link; missing context fails closed; pooled connections do not leak; tests run as the runtime role | TODO |
+| CRM-020 | Identity and sessions (OIDC, HttpOnly cookies, CSRF, revocation) | Issuer, audience, signature, state, nonce and PKCE validated | DONE |
+| CRM-021 | Tenants, memberships, invitations | Expired or reused invitations fail; removed members lose access | DONE |
+| CRM-022 | Roles and permission matrix | Role escalation fails; read-only cannot mutate; last owner cannot be removed | DONE |
+| CRM-023 | Row-level security isolation | Two tenants cannot cross-read, write or link; missing context fails closed; pooled connections do not leak; tests run as the runtime role | DONE |
 
 ## Phase 03 — core CRM and history (P1, depends on 02)
 

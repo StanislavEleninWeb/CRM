@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:5173"
     api_base_url: str = "http://localhost:8000"
 
+    # OIDC. ``oidc_issuer`` is the exact ``iss`` value and the browser-facing address.
+    # ``oidc_internal_url`` is how the API reaches the same provider (back channel).
+    oidc_issuer: str = ""
+    oidc_internal_url: str | None = None
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_scopes: str = "openid email profile"
+    oidc_dev_provider: bool = False
+    session_ttl_hours: int = Field(default=12, ge=1, le=24 * 30)
+    invitation_ttl_hours: int = Field(default=72, ge=1, le=24 * 30)
+
     default_currency: str = Field(default="EUR", pattern=r"^[A-Z]{3}$")
     default_timezone: str = "Europe/Sofia"
 
@@ -46,10 +57,19 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _no_placeholders_outside_development(self) -> "Settings":
         if self.environment in ("staging", "production"):
-            for name in ("session_secret", "database_url"):
+            for name in ("session_secret", "database_url", "oidc_client_secret"):
                 if PLACEHOLDER_PREFIX in str(getattr(self, name)):
                     raise ValueError(f"{name} still contains a placeholder value")
+            if self.oidc_dev_provider:
+                raise ValueError("the development identity provider is not allowed here")
+            for name in ("oidc_issuer", "public_base_url"):
+                if not str(getattr(self, name)).startswith("https://"):
+                    raise ValueError(f"{name} must use https")
         return self
+
+    @property
+    def cookies_secure(self) -> bool:
+        return self.public_base_url.startswith("https://")
 
     @property
     def is_production_like(self) -> bool:
