@@ -1,0 +1,46 @@
+# Private reference data — never commit real prospect contacts (public repo)
+tests/fixtures/private/
+*.xlsx
+*.xls
+*.csv
+!tests/fixtures/synthetic/**
+!backend/tests/fixtures/synthetic/**
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!*.env.example
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Local runtime data
+.data/
+backups/
+*.dump
+*.log
+
+# Tooling
+.claude/
+.DS_Store
+.idea/
+.vscode/
