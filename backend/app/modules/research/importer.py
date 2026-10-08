@@ -666,6 +666,18 @@ def commit_import(db: Session, tenant_id: UUID, import_id: UUID, actor_id: UUID 
         ).scalar_one_or_none()
         research_changed = current_hash != digest
         if research_changed:
+            # Anything a reviewer edited by hand is carried into the new snapshot.
+            previous = (
+                db.execute(
+                    text("SELECT * FROM lead_assessments WHERE tenant_id = :t AND lead_id = :l AND is_current"),
+                    {**scope, "l": lead_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            kept_fields = [f for f in (previous["user_edited_fields"] if previous else []) if f in ASSESSMENT_COLUMNS]
+            for field_name in kept_fields:
+                assessment[field_name] = previous[field_name]  # type: ignore[index]
             db.execute(
                 text(
                     "UPDATE lead_assessments SET is_current = false, superseded_at = now() "
@@ -676,8 +688,10 @@ def commit_import(db: Session, tenant_id: UUID, import_id: UUID, actor_id: UUID 
             db.execute(
                 text(
                     "INSERT INTO lead_assessments (tenant_id, lead_id, import_id, service_id, contact_states, raw_row, "
-                    "content_hash, " + ", ".join(ASSESSMENT_COLUMNS) + ") VALUES (:t, :l, :i, :service_id, "
-                    "CAST(:contact_states AS jsonb), CAST(:raw_row AS jsonb), :hash, "
+                    "user_edited_fields, content_hash, "
+                    + ", ".join(ASSESSMENT_COLUMNS)
+                    + ") VALUES (:t, :l, :i, :service_id, "
+                    "CAST(:contact_states AS jsonb), CAST(:raw_row AS jsonb), :kept, :hash, "
                     + ", ".join(f":{c}" for c in ASSESSMENT_COLUMNS)
                     + ")"
                 ),
@@ -686,6 +700,7 @@ def commit_import(db: Session, tenant_id: UUID, import_id: UUID, actor_id: UUID 
                     "l": lead_id,
                     "i": import_id,
                     "hash": digest,
+                    "kept": kept_fields,
                     "service_id": service_id(assessment["service_category"]),
                     "contact_states": json.dumps(assessment["contact_states"]),
                     "raw_row": json.dumps(row["raw"], ensure_ascii=False),

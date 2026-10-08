@@ -50,10 +50,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-050 | Prospect workspace: table, mobile cards, filters | Ranking and filters reflect edits | TODO |
-| CRM-051 | Verification queue | Stale or uncertain findings route to verification | TODO |
-| CRM-052 | Daily shortlist snapshots | Dated in tenant time zone; fillers labelled; never padded | TODO |
-| CRM-053 | Mobile call outcomes and follow-ups | Dialer launch is separate from a reported call; follow-ups persist | TODO |
+| CRM-050 | Prospect workspace: table, mobile cards, filters | Ranking and filters reflect edits | DONE |
+| CRM-051 | Verification queue | Stale or uncertain findings route to verification | DONE |
+| CRM-052 | Daily shortlist snapshots | Dated in tenant time zone; fillers labelled; never padded | DONE |
+| CRM-053 | Mobile call outcomes and follow-ups | Dialer launch is separate from a reported call; follow-ups persist | DONE |
 
 ## Phase 06 — provider connections and usage (P0, depends on 02–05)
 

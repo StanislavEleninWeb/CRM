@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core` (local commits only; not pushed) |
-| Last completed phase | 04 |
-| Next action | Phase 05: CRM-050 prospect workspace, then the verification queue, daily shortlist and call outcomes |
+| Last completed phase | 05 (release A complete) |
+| Next action | Phase 06: CRM-060 encrypted provider connections, then the usage ledger and atomic budgets |
 
 ## Phases
 
@@ -20,7 +20,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 02 Identity, tenancy, roles, isolation | DONE | see `git log` (`Phase 02`) | Production identity provider and MFA verification remain BLOCKED (U-01) |
 | 03 Core CRM and history | DONE | see `git log` (`Phase 03`) | Lead list and lead-detail screens arrive with the prospect workspace in phase 05 |
 | 04 Research schema, scoring, import/export | DONE | see `git log` (`Phase 04`) | Reference-workbook gate passed locally; those tests are skipped in public CI |
-| 05 Prospect review, shortlist, calls | TODO | — | |
+| 05 Prospect review, shortlist, calls | DONE | see `git log` (`Phase 05`) | Phase A handoff check passed on the local stack |
 | 06 Provider connections and usage | TODO | — | |
 | 07 AI research | TODO | — | |
 | 08 Internal Gmail and eligibility | TODO | — | |

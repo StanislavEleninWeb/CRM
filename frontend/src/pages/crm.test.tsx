@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppRoutes, createQueryClient } from "../App";
-import { json, makeMe, mockApi } from "../test/mockApi";
+import { json, makeMe, makeProspect, makeQueue, mockApi } from "../test/mockApi";
 
 const TENANT = { id: "tenant-a", name: "SEWEB" };
 const PERMISSIONS = ["crm.read", "crm.write", "members.read"];
@@ -224,5 +224,142 @@ describe("import page", () => {
     await userEvent.click(screen.getByRole("button", { name: "Import 94 leads" }));
     expect(await screen.findByText(/Import complete/)).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("94 added");
+  });
+});
+
+describe("today call queue", () => {
+  it("labels fillers, shows the due follow-up first and explains a short list", async () => {
+    const entries = [
+      {
+        rank: 1,
+        is_filler: true,
+        reason: "follow_up_due",
+        score_at_snapshot: 61,
+        tier_at_snapshot: "B",
+        prospect: makeProspect({
+          lead_id: "lead-2",
+          company_name: "Vet Clinic",
+          total: 61,
+          tier: "B",
+          next_follow_up_at: "2026-10-08T07:00:00Z",
+        }),
+      },
+      { rank: 2, is_filler: false, reason: "phone_first", score_at_snapshot: 89, tier_at_snapshot: "A", prospect: makeProspect() },
+    ];
+    mockApi({
+      "GET /api/v1/auth/me": () =>
+        json(makeMe({ active: { ...TENANT, permissions: [...PERMISSIONS, "calls.log"] } })),
+      "GET /api/v1/call-queue": () =>
+        json(
+          makeQueue(entries, {
+            shortfall: 23,
+            shortfall_reason: "Only 2 prospects with a number that may be called are available. The list is not padded.",
+          }),
+        ),
+      "GET /api/v1/prospects": () => json(page([], 21)),
+    });
+    renderAt("/");
+    const first = await screen.findByRole("link", { name: "1. Vet Clinic" });
+    expect(first).toHaveAttribute("href", "/prospects/lead-2");
+    expect(screen.getByText("Tier B · 61 · filler")).toBeInTheDocument();
+    expect(screen.getByText(/Follow-up due/)).toBeInTheDocument();
+    expect(screen.getByText("Tier A · 89")).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("The list is not padded.");
+    expect(screen.getAllByText("Not yet verified")).toHaveLength(2);
+    // "Open" on the first card carries the next prospect, for one-tap progress through the list.
+    expect(screen.getByRole("link", { name: /Open\s*Vet Clinic/ })).toHaveAttribute(
+      "href",
+      "/prospects/lead-2?next=lead-1",
+    );
+    expect(await screen.findByText("21")).toBeInTheDocument();
+  });
+});
+
+describe("prospect page", () => {
+  function detail(overrides: Record<string, unknown> = {}) {
+    return {
+      ...makeProspect(),
+      listing_url: null,
+      listing_id_type: "unknown",
+      scores: [],
+      calls: [],
+      channels: [
+        channel({ id: "ch-1", raw_value: "0888 123 456", dial_uri: "tel:+359888123456" }),
+        channel({ id: "ch-2", raw_value: "0884 000 004", purpose: "emergency", allow_sales_use: false, dial_uri: null }),
+      ],
+      ...overrides,
+    };
+  }
+  const attempt = {
+    id: "call-1",
+    lead_id: "lead-1",
+    company_id: "c1",
+    channel_id: "ch-1",
+    dialed_value: "0888 123 456",
+    launched_at: "2026-10-08T09:00:00Z",
+    outcome: null,
+    outcome_reported_at: null,
+    outcome_source: "user_reported",
+    notes: null,
+    follow_up_task_id: null,
+    follow_up_scope: null,
+    requested_email: null,
+    created_by: "user-1",
+    created_at: "2026-10-08T09:00:00Z",
+    dial_uri: "tel:+359888123456",
+  };
+
+  it("records the dialler launch, then asks the user what happened", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined); // jsdom cannot open tel: links
+    const calls = mockApi({
+      "GET /api/v1/auth/me": () =>
+        json(makeMe({ active: { ...TENANT, permissions: [...PERMISSIONS, "calls.log", "research.review"] } })),
+      "GET /api/v1/prospects/lead-1": () => json(detail()),
+      "POST /api/v1/prospects/lead-1/calls": () => json(attempt, 201),
+      "POST /api/v1/calls/call-1/outcome": () => json({ ...attempt, outcome: "follow_up_requested" }),
+    });
+    renderAt("/prospects/lead-1");
+    expect(await screen.findByText("Emergency line: not for sales calls")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Call / })).toHaveLength(1);
+    expect(screen.getByText(/Not verified · source: imported list/)).toBeInTheDocument();
+    expect(screen.getByText(/Email: No email found/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Call 0888 123 456" }));
+    expect(await screen.findByText("What happened on the call?")).toBeInTheDocument();
+    expect(calls.find((call) => call.path.endsWith("/calls"))?.body).toEqual({ channel_id: "ch-1" });
+    expect(calls.some((call) => call.path.endsWith("/outcome"))).toBe(false); // no outcome is assumed
+
+    await userEvent.click(screen.getByRole("button", { name: "Follow-up requested" }));
+    await userEvent.type(screen.getByLabelText("Call back on"), "2026-10-10T10:30");
+    await userEvent.type(screen.getByLabelText("What they asked for"), "Booking demo details");
+    await userEvent.click(screen.getByRole("button", { name: "Save outcome" }));
+    await waitFor(() => expect(calls.some((call) => call.path.endsWith("/outcome"))).toBe(true));
+    const body = calls.find((call) => call.path.endsWith("/outcome"))?.body as Record<string, unknown>;
+    expect(body.outcome).toBe("follow_up_requested");
+    expect(body.follow_up_note).toBe("Booking demo details");
+    expect(String(body.follow_up_at)).toMatch(/^2026-10-10T/);
+    expect(body.do_not_call).toBe(false);
+  });
+
+  it("offers no call button to a read-only member or for a dismissed prospect", async () => {
+    mockApi({
+      "GET /api/v1/auth/me": me,
+      "GET /api/v1/prospects/lead-1": () =>
+        json(
+          detail({
+            status: "disqualified",
+            actions: {
+              call: { available: false, reason: "prospect_inactive" },
+              email: { available: false, reason: "prospect_inactive" },
+            },
+            channels: [channel({ id: "ch-1", raw_value: "0888 123 456", dial_uri: null })],
+          }),
+        ),
+    });
+    renderAt("/prospects/lead-1");
+    expect(await screen.findByText("Dismissed")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Call / })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Call outcome" })).not.toBeInTheDocument();
+    expect(screen.getByText("Not being worked")).toBeInTheDocument();
   });
 });

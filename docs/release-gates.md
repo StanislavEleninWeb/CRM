@@ -9,9 +9,9 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Two-tenant isolation verified as the runtime database role | PASS for identity and CRM tables (phases 02–03); re-verified for each later phase by the schema guard test |
 | Reference workbook import: all fixture assertions | PASS (local, private fixture; skipped in public CI) |
 | Deterministic scoring reproduces tiers and boundaries | PASS |
-| Import → score → queue → call outcome → follow-up end to end | NOT_STARTED |
-| Date-only stability and mobile layout verified | NOT_STARTED |
-| Local backup and restore exercised | NOT_STARTED |
+| Import → score → queue → call outcome → follow-up end to end | PASS (`infra/e2e/phase_a.py`, real worker, 41 checks) |
+| Date-only stability and mobile layout verified | PASS (four time zones; 375 px browser check) |
+| Local backup and restore exercised | PASS (`docs/runbooks/backup-restore.md`) |
 | Hosted pilot security and deployment checks | BLOCKED — no hosting target (U-07) |
 
 ## Phase B — research and internal Gmail pilot (phases 06–09)

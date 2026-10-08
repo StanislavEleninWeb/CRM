@@ -71,11 +71,12 @@ describe("signed in", () => {
     expect(post?.headers.get("X-CSRF-Token")).toBe("csrf-from-cookie");
   });
 
-  it("shows system details from the API on Today", async () => {
+  it("shows an empty call queue with a way to fill it", async () => {
     mockApi({ "GET /api/v1/auth/me": () => json(makeMe({ active: TENANT_A })), ...systemRoutes });
     renderAt("/");
-    expect(await screen.findByText("Europe/Sofia")).toBeInTheDocument();
-    expect(await screen.findByText("database: ok, redis: ok")).toBeInTheDocument();
+    expect(await screen.findByText("Nobody to call yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Import a prospect list" })).toBeInTheDocument();
+    expect(screen.getByText(/No mailbox is connected/)).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Workspace" })).toHaveValue("tenant-a");
   });
 

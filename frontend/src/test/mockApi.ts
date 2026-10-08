@@ -86,15 +86,82 @@ export function makeMe(options: {
   };
 }
 
+export function makeProspect(overrides: Record<string, unknown> = {}) {
+  return {
+    lead_id: "lead-1",
+    external_id: "P-001",
+    status: "qualified",
+    outreach_status: "not_contacted",
+    owner_user_id: null,
+    next_action: null,
+    next_action_at: null,
+    company_id: "c1",
+    company_name: "Salon Aurora",
+    city: "Sofia",
+    country: "Bulgaria",
+    business_type: "Hair salon",
+    industry_group: "Beauty & wellness",
+    website_url: null,
+    checked_on: "2026-10-07",
+    is_stale: false,
+    confidence: "high",
+    source_type: "user_import",
+    verification_state: "unverified",
+    website_status_raw: "Loads (HTTPS)",
+    website_base: "loads",
+    total: 89,
+    tier: "A",
+    components: { evidence: 28, relevance: 23, value: 15, reachability: 14, activity: 9 },
+    score_origin: "import",
+    finding: "Homepage shows template filler text.",
+    finding_state: "unverified",
+    evidence_url: "https://example-salon.bg/",
+    observation_id: "obs-1",
+    hypothesis: "Booking is done by phone only.",
+    hypothesis_status: "unconfirmed",
+    hypothesis_id: "hyp-1",
+    service_category: "Online booking",
+    recommended_service_raw: "Online booking",
+    fit_explanation: "Active salon.",
+    proposed_benefit: "Clients book at any hour.",
+    preferred_channel: "phone",
+    fallback_channels: [],
+    channel_instruction: null,
+    outreach_opening: "Здравейте!",
+    discovery_question: "How are bookings handled?",
+    notes: null,
+    tags: ["Other"],
+    phone_count: 1,
+    dialable_count: 1,
+    email_count: 0,
+    restriction_reasons: null,
+    next_follow_up_at: null,
+    open_follow_ups: 0,
+    needs_verification: ["unverified_high_priority"],
+    actions: {
+      call: { available: true, reason: null },
+      email: { available: false, reason: "no_email_found" },
+    },
+    user_edited_fields: [],
+    ...overrides,
+  };
+}
+
+export function makeQueue(entries: Record<string, unknown>[] = [], extra: Record<string, unknown> = {}) {
+  return {
+    queue_date: "2026-10-08",
+    timezone: "Europe/Sofia",
+    requested_size: 25,
+    tie_break: "score (high to low), confidence, most recently checked, Lead ID",
+    shortfall: 0,
+    shortfall_reason: null,
+    entries,
+    ...extra,
+  };
+}
+
+/** The requests the Today page makes, answered with an empty workspace. */
 export const systemRoutes: Record<string, Handler> = {
-  "GET /api/v1/system/info": () =>
-    json({
-      name: "SEWEB CRM",
-      api_version: "v1",
-      environment: "test",
-      default_currency: "EUR",
-      default_timezone: "Europe/Sofia",
-    }),
-  "GET /api/v1/system/readiness": () =>
-    json({ status: "ready", checks: { database: "ok", redis: "ok" } }),
+  "GET /api/v1/call-queue": () => json(makeQueue()),
+  "GET /api/v1/prospects": () => json({ items: [], total: 0, limit: 1, offset: 0 }),
 };

@@ -1,5 +1,6 @@
 #!/bin/sh
 # Runs once, as the bootstrap superuser, when the data directory is empty.
+# Can also be run later with database names as arguments to prepare additional databases.
 # Creates the two roles the application uses:
 #   crm_migrator - owns schema objects and runs migrations
 #   crm_app      - runtime role: no superuser, no BYPASSRLS, no DDL
@@ -45,5 +46,10 @@ SQL
 }
 
 create_roles
-prepare_database "$POSTGRES_DB"
-prepare_database "${POSTGRES_DB}_test"
+if [ "$#" -gt 0 ]; then
+  # Called by hand, for example to prepare a scratch database before a restore.
+  for database in "$@"; do prepare_database "$database"; done
+else
+  prepare_database "$POSTGRES_DB"
+  prepare_database "${POSTGRES_DB}_test"
+fi

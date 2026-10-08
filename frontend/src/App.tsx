@@ -15,6 +15,8 @@ import { ImportPage } from "./pages/ImportPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewWorkspacePage } from "./pages/NewWorkspacePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { ProspectPage } from "./pages/ProspectPage";
+import { ProspectsPage } from "./pages/ProspectsPage";
 import { TasksPage } from "./pages/TasksPage";
 import { TeamPage } from "./pages/TeamPage";
 import { TodayPage } from "./pages/TodayPage";
@@ -69,6 +71,9 @@ export function AppRoutes() {
               ["opportunities", <DealsPage key="deals" />],
               ["tasks", <TasksPage key="tasks" />],
               ["import", <ImportPage key="import" />],
+              ["prospects", <ProspectsPage key="prospects" />],
+              ["verification", <ProspectsPage key="verification" verificationOnly />],
+              ["prospects/:leadId", <ProspectPage key="prospect" />],
             ] as const
           ).map(([path, element]) => (
             <Route key={path} path={path} element={<RequireWorkspace>{element}</RequireWorkspace>} />

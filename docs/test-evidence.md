@@ -158,3 +158,41 @@ Preview changes nothing until commit; a row becomes structured records with raw 
 - Rows without a Lead ID are matched only by exact name and city; fuzzy matching is left to the duplicate review on the company page.
 - The export's shortlist sheet is the current top 25 by score. The call-first daily queue arrives in phase 05.
 - A defect found and fixed while running the real stack: the worker and scheduler were built as separate images and had gone stale. They now share one image with the API.
+
+## Phase 05 and the phase A handoff — 8 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 156 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 18 tests passed |
+| `docker compose exec api python /infra/e2e/phase_a.py` on a fresh stack | 41 checks passed, using the real Celery worker and the reference workbook |
+| `./infra/backup/backup.sh` then `./infra/backup/restore-check.sh` | Restore check passed: 35 tables, 2,792 rows, 43 policies, row-level security intact |
+| Browser at 375 px width, real data | Today queue and prospect page: no horizontal scrolling, smallest tap target 44 px |
+
+What the tests cover:
+
+- **Ranking:** score, then confidence, then freshest check, then Lead ID; unscored prospects sort last and show no score; a score override re-ranks immediately; every filter (city, industry, service, issue tag, tier, confidence, freshness, channel, status, search).
+- **Verification queue:** a Tier A lead with an unverified finding, a low-confidence lead and a lead checked more than 30 days ago are queued; a normal Tier B lead is not; verifying records who and when and refreshes the check date; contradicting needs a note; the freshness window is a tenant setting.
+- **Reviewed edits:** the opening and instruction can be edited; the timeline keeps before and after; a later re-import refreshes the finding but keeps the reviewer's wording; findings themselves cannot be edited through this route.
+- **Dismissal:** needs a reason, hides the prospect from the working list and the queue, removes dial links, and can be undone.
+- **Call queue:** due follow-ups first, then phone-first prospects by score, then other callable prospects; Tier B entries are flagged as fillers; a prospect with no phone or only an emergency line is not queued; a short list says how many were eligible and is not padded; the score-ranked view is separate; queue size is a tenant setting.
+- **Snapshots:** dated in the tenant time zone (checked at UTC+14 and UTC−11); "tomorrow" is a date, never a label; a snapshot keeps the score as ranked that day beside the current score; repeat generation returns the same snapshot unless asked to regenerate; snapshots add no leads.
+- **Calls:** starting a call records only that the dialler was opened; outreach status and the timeline change only when the user reports an outcome; outcomes are a fixed list and a duration is not accepted; a second outcome for the same attempt is refused; calls made elsewhere are logged without a dialler launch.
+- **Follow-ups:** a requested follow-up needs a date, creates a stored call task, records what was asked for, and can store a business email given on the call as an unverified channel; the email action stays unavailable without a mailbox.
+- **Do not call:** a wrong number becomes invalid and loses its dial link; "not interested" with a do-not-call request creates an audited restriction and removes the prospect from the queue; emergency lines and restricted companies are refused with a clear reason.
+- **Permissions and isolation:** read-only members see prospects without dial links and cannot call, edit, verify, dismiss or generate lists; another tenant gets 404 for prospects, snapshots, calls, findings and hypotheses.
+- **Reference workbook:** 94 prospects; all 21 Tier A leads wait for verification; 5 are low-confidence; 93 can be called and 1 has no phone; the score-ranked list equals the imported shortlist; the call queue holds 25 phone-first prospects and intentionally differs from the score-ranked list.
+
+### Defects found by running the real stack, and fixed
+
+- Prospect cards overflowed the screen at 375 px (long findings and badges). Fixed in CSS and re-checked: page width equals viewport width.
+- The first restore attempt failed because a scratch database lacked the role and extension preparation a new environment gets. The role script now accepts database names, and the runbook uses it.
+
+**Limitations:**
+
+- The handoff check and the restore exercise ran on a developer machine. A hosted pilot still needs host-specific security and deployment checks (U-07); this is a local prototype, not a production deployment.
+- Calls are user-reported. Nothing confirms that a call connected or how long it lasted.
+- The verification queue rules are fixed (low confidence, stale, contradicted, unverified Tier A); only the freshness window is configurable.
+- Lead conversion to an opportunity and lead-level notes are available on the company page and through the API; the prospect page links there rather than duplicating them.
+- Accessibility was checked through semantic queries in tests (roles, labels, names) and tap-target size; no screen-reader session or automated contrast audit was run.
