@@ -20,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/opportunities", label: "Opportunities", permission: "crm.read" },
   { to: "/tasks", label: "Tasks", permission: "crm.read" },
   { to: "/import", label: "Import", permission: "import.run" },
+  { to: "/integrations", label: "Integrations", permission: "reports.read" },
   { to: "/team", label: "Team", permission: "members.read" },
   { to: "/account", label: "Account" },
 ];

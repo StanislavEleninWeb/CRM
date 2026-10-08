@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     session_ttl_hours: int = Field(default=12, ge=1, le=24 * 30)
     invitation_ttl_hours: int = Field(default=72, ge=1, le=24 * 30)
 
+    # Provider-secret encryption. Comma-separated "version:base64-32-byte-key", newest first.
+    # The first entry encrypts new secrets; every entry can decrypt.
+    secret_encryption_keys: str = ""
+
     s3_endpoint_url: str = ""
     s3_bucket: str = "crm-local"
     s3_access_key: str = ""

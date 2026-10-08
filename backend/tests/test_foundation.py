@@ -98,6 +98,14 @@ def test_log_redaction() -> None:
     assert "abcdefghijklmnop" not in event["note"]
     assert "pw" not in event["url"]
     assert redact_value(42) == 42
+    for url in (
+        "https://api.example.test/v1/places?key=AIzaSyRealLookingKey123&fields=name",
+        "https://x.test/cb?state=abc&code=4/0AbCdEf&scope=openid",
+        "GET /hook?access_token=ya29.secret HTTP/1.1",
+    ):
+        cleaned = redact_value(url)
+        assert "AIzaSyRealLookingKey123" not in cleaned and "4/0AbCdEf" not in cleaned and "ya29.secret" not in cleaned
+        assert "fields=name" in cleaned or "state=abc" in cleaned or "/hook?" in cleaned  # the rest of the URL is kept
 
 
 def test_settings_reject_placeholders_in_production() -> None:

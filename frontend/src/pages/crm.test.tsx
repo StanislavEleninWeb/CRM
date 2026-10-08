@@ -394,3 +394,58 @@ describe("prospect page", () => {
     expect(screen.getByText("Not being worked")).toBeInTheDocument();
   });
 });
+
+describe("integrations page", () => {
+  it("never shows a stored key and keeps estimated and confirmed spend apart", async () => {
+    const calls = mockApi({
+      "GET /api/v1/auth/me": () =>
+        json(makeMe({ active: { ...TENANT, permissions: [...PERMISSIONS, "integrations.manage", "reports.read", "tenant.billing"] } })),
+      "GET /api/v1/provider-adapters": () =>
+        json([{ name: "fake_model", purpose: "model", label: "Local test model (not a real provider)", access_modes: ["byok"], is_local_test_adapter: true }]),
+      "GET /api/v1/provider-connections": () =>
+        json([
+          {
+            id: "pc-1",
+            provider: "fake_model",
+            purpose: "model",
+            label: "Research model",
+            access_mode: "byok",
+            status: "error",
+            has_credential: true,
+            credential_hint: "…pYd3",
+            encryption_key_version: "v1",
+            config: {},
+            verification: "implemented",
+            is_local_test_adapter: true,
+            last_checked_at: "2026-10-08T09:00:00Z",
+            last_ok_at: null,
+            last_error: "The provider is rate limiting requests.",
+            rate_limited_until: null,
+            consecutive_failures: 1,
+            revoked_at: null,
+            created_at: "2026-10-08T09:00:00Z",
+          },
+        ]),
+      "GET /api/v1/budgets": () => json([]),
+      "GET /api/v1/usage/summary": () =>
+        json({ currency: "EUR", period_start: "2026-10-01", verified_amount: "5.0000", estimated_amount: "7.2500", unknown_reserved_amount: "60.0000", reserved_amount: "0.0000", by_provider: [], entries: 2 }),
+      "POST /api/v1/provider-connections": () => json({}, 201),
+    });
+    renderAt("/integrations");
+    expect(await screen.findByText(/key …pYd3/)).toBeInTheDocument();
+    expect(screen.getByText(/local test adapter, not a real provider/)).toBeInTheDocument();
+    expect(screen.getByText(/The provider is rate limiting requests\./)).toBeInTheDocument();
+    expect(screen.getByText("No budget is set.")).toBeInTheDocument();
+    expect(await screen.findByText("€5.00")).toBeInTheDocument();
+    expect(screen.getByText("€7.25")).toBeInTheDocument();
+    expect(screen.getByText("€60.00")).toBeInTheDocument();
+    const keyInput = screen.getByLabelText("API key");
+    expect(keyInput).toHaveAttribute("type", "password");
+    expect(keyInput).toHaveAttribute("autocomplete", "off");
+    await userEvent.type(screen.getByLabelText("Name"), "My model");
+    await userEvent.type(keyInput, "sk-test-0000000000");
+    await userEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+    await waitFor(() => expect(keyInput).toHaveValue("")); // cleared from the page once sent
+  });
+});

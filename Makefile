@@ -6,6 +6,8 @@ WEB := $(COMPOSE) run --rm -T --no-deps frontend
 
 .env:
 	cp .env.example .env
+	@# A fresh local key for encrypting provider secrets. Never reuse it outside this machine.
+	@key=$$(openssl rand -base64 32) && sed -i.bak "s|^SECRET_ENCRYPTION_KEYS=.*|SECRET_ENCRYPTION_KEYS=local1:$$key|" .env && rm -f .env.bak
 
 up: .env ## Start the whole local stack
 	$(COMPOSE) up -d --build --wait

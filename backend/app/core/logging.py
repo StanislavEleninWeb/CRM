@@ -15,11 +15,16 @@ _SENSITIVE_KEY = re.compile(
 )
 _BEARER = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}")
 _URL_CREDENTIALS = re.compile(r"(?P<scheme>[a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@")
+# Secrets passed as URL query parameters, for example ``?key=...`` or ``&access_token=...``.
+_QUERY_SECRET = re.compile(
+    r"(?i)(?P<name>[?&](?:api[_-]?key|key|token|access_token|refresh_token|id_token|secret|client_secret|password|signature|sig|code)=)[^&\s#\"']+"
+)
 
 
 def redact_value(value: Any) -> Any:
     if isinstance(value, str):
         value = _BEARER.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
+        value = _QUERY_SECRET.sub(lambda m: f"{m.group('name')}{REDACTED}", value)
         return _URL_CREDENTIALS.sub(lambda m: f"{m.group('scheme')}{REDACTED}@", value)
     if isinstance(value, dict):
         return {k: (REDACTED if _SENSITIVE_KEY.search(str(k)) else redact_value(v)) for k, v in value.items()}

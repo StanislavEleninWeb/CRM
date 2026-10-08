@@ -15,6 +15,7 @@ dependencies = [
     "redis>=5.2",
     "structlog>=24.4",
     "pyjwt[crypto]>=2.10",
+    "cryptography>=43",
     "httpx>=0.27",
     "boto3>=1.35",
     "python-multipart>=0.0.12",

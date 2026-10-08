@@ -207,3 +207,32 @@ What the tests cover:
 | The export showed the outreach status and recommended channel as imported, even after they changed | The export shows current values and uses the imported wording only while it still means the same | `test_export_shows_the_current_status_and_channel_not_the_imported_text` |
 
 After these fixes: backend 159 passed (reference workbook present), frontend 19 passed, phase A end-to-end check passed on a fresh stack.
+
+## Phase 06 — 8 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 176 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 20 tests passed |
+
+What is covered:
+
+- **Encryption:** AES-256-GCM; a secret opens only with the same tenant, provider and connection it was sealed for; a flipped byte fails; the same secret sealed twice differs.
+- **Copied ciphertext:** one tenant's stored ciphertext written into another tenant's row cannot be decrypted; the victim connection reports "cannot be read" and the original still works.
+- **Key rotation:** old secrets stay readable while the old key is listed; the rotation script re-seals every tenant's credentials; after the old key is removed the re-sealed credentials still work and un-rotated ones are reported.
+- **Write-only credentials:** no response, list, audit entry or log line contains a realistic key; the database holds only ciphertext and a four-character hint. A scan of the OpenAPI document finds no read schema with a secret-like field.
+- **Log redaction:** a defect was found here and fixed. A key passed in a URL query string (`?key=…`, `&access_token=…`, `&code=…`) was logged in full. Query-string secrets are now redacted, with a test.
+- **Health:** failures back off (longer after each failure), rate-limit responses are recorded, a rejected credential marks the connection revoked and later checks fail visibly; reconnecting reuses the same record and clears the failure state; revoking erases the stored key.
+- **Budgets, concurrency:** 20 threads, each on its own database connection, race for a budget that fits 10 reservations: exactly 10 succeed and the held total equals the limit. Eight threads using the same idempotency key produce one reservation.
+- **Budgets, lifecycle:** no budget means paid work is refused; settling returns the unused part and writes a ledger entry with its cost basis; settling twice changes nothing; a timeout becomes `unknown`, keeps the budget held, cannot be released by code and must be resolved by an owner (charged with an amount, or not charged); a real charge above the reservation is recorded in full, marks the budget overrun and blocks further work until the limit is raised; the concurrent-run limit is enforced.
+- **Usage:** provider-confirmed and estimated amounts are reported separately and never added together; held and unknown amounts are shown.
+- **Permissions and isolation:** only owners and administrators manage connections; only owners set budgets; managers can read spend; another tenant gets 404 or an empty list; the ledger cannot be updated or deleted by the application role.
+- **Environment guard:** local test adapters are not offered when the environment is staging or production.
+
+**Limitations:**
+
+- The only adapters are `fake_model` and `fake_discovery`, clearly labelled as local test adapters. No real provider has been contacted and no cost figure here is a real charge.
+- OAuth connections are modelled (`access_mode = oauth`) but the first OAuth flow arrives with Gmail in phase 08.
+- Monthly budgets are per calendar month in the tenant time zone; there is no automatic carry-over or alerting before the limit is reached.
+- Encryption keys come from an environment variable. A managed key service is not integrated.

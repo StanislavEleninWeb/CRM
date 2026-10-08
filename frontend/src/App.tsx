@@ -12,6 +12,7 @@ import { CompaniesPage } from "./pages/CompaniesPage";
 import { CompanyPage } from "./pages/CompanyPage";
 import { DealsPage } from "./pages/DealsPage";
 import { ImportPage } from "./pages/ImportPage";
+import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewWorkspacePage } from "./pages/NewWorkspacePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -71,6 +72,7 @@ export function AppRoutes() {
               ["opportunities", <DealsPage key="deals" />],
               ["tasks", <TasksPage key="tasks" />],
               ["import", <ImportPage key="import" />],
+              ["integrations", <IntegrationsPage key="integrations" />],
               ["prospects", <ProspectsPage key="prospects" />],
               ["verification", <ProspectsPage key="verification" verificationOnly />],
               ["prospects/:leadId", <ProspectPage key="prospect" />],

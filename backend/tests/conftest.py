@@ -23,6 +23,9 @@ TEST_MIGRATION_URL = _migrator_url.set(database=_test_db).render_as_string(hide_
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["MIGRATION_DATABASE_URL"] = TEST_MIGRATION_URL
 os.environ["ENVIRONMENT"] = "test"
+if not os.environ.get("SECRET_ENCRYPTION_KEYS"):
+    # A fixed key for tests only. Real environments generate their own.
+    os.environ["SECRET_ENCRYPTION_KEYS"] = "test1:" + "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU="
 
 PRIVATE_FIXTURES = Path(os.environ.get("PRIVATE_FIXTURE_DIR", "/fixtures/private"))
 REFERENCE_WORKBOOK = PRIVATE_FIXTURES / "SEWEB_prospects_Bulgaria_2026-10-07.xlsx"

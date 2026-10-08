@@ -59,10 +59,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-060 | Secure provider connections | Secrets encrypted with versioned keys; rotation works; never returned | TODO |
-| CRM-061 | Usage ledger | Estimated and verified costs distinguished | TODO |
-| CRM-062 | Atomic budgets | Concurrent jobs cannot oversubscribe; retries do not double-reserve | TODO |
-| CRM-063 | Provider health | Revoked credentials fail visibly; reconnect keeps history | TODO |
+| CRM-060 | Secure provider connections | Secrets encrypted with versioned keys; rotation works; never returned | DONE |
+| CRM-061 | Usage ledger | Estimated and verified costs distinguished | DONE |
+| CRM-062 | Atomic budgets | Concurrent jobs cannot oversubscribe; retries do not double-reserve | DONE |
+| CRM-063 | Provider health | Revoked credentials fail visibly; reconnect keeps history | DONE |
 
 ## Phase 07 — evidence-based AI research (P1, depends on 06)
 

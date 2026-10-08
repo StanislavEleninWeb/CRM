@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core` (local commits only; not pushed) |
-| Last completed phase | 05 (release A complete) |
-| Next action | Phase 06: CRM-060 encrypted provider connections, then the usage ledger and atomic budgets |
+| Last completed phase | 06 (release A complete; release B in progress) |
+| Next action | Phase 07: CRM-070 research orchestrator with contract-tested adapters and a synthetic end-to-end run |
 
 ## Phases
 
@@ -21,7 +21,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 03 Core CRM and history | DONE | see `git log` (`Phase 03`) | Lead list and lead-detail screens arrive with the prospect workspace in phase 05 |
 | 04 Research schema, scoring, import/export | DONE | see `git log` (`Phase 04`) | Reference-workbook gate passed locally; those tests are skipped in public CI |
 | 05 Prospect review, shortlist, calls | DONE | see `git log` (`Phase 05`) | Phase A handoff check passed on the local stack |
-| 06 Provider connections and usage | TODO | — | |
+| 06 Provider connections and usage | DONE | see `git log` (`Phase 06`) | Only local test adapters exist; no real provider has been contacted |
 | 07 AI research | TODO | — | |
 | 08 Internal Gmail and eligibility | TODO | — | |
 | 09 Reliable manual sends | TODO | — | |
