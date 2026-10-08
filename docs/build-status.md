@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core` (local commits only; not pushed) |
-| Last completed phase | 06 (release A complete; release B in progress) |
-| Next action | Phase 07: CRM-070 research orchestrator with contract-tested adapters and a synthetic end-to-end run |
+| Last completed phase | 07, with one open item (release A complete; release B in progress) |
+| Next action | Phase 08: CRM-084 email eligibility service first, then internal Gmail OAuth, drafts and history sync |
 
 ## Phases
 
@@ -22,7 +22,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 04 Research schema, scoring, import/export | DONE | see `git log` (`Phase 04`) | Reference-workbook gate passed locally; those tests are skipped in public CI |
 | 05 Prospect review, shortlist, calls | DONE | see `git log` (`Phase 05`) | Phase A handoff check passed on the local stack |
 | 06 Provider connections and usage | DONE | see `git log` (`Phase 06`) | Only local test adapters exist; no real provider has been contacted |
-| 07 AI research | TODO | — | |
+| 07 AI research | DONE except refresh mode | see `git log` (`Phase 07`) | Synthetic runs only. Live research BLOCKED (U-03, U-04). Open: refresh-existing mode (CRM-074), multi-page inspection |
 | 08 Internal Gmail and eligibility | TODO | — | |
 | 09 Reliable manual sends | TODO | — | |
 | 10 Public API, webhooks, Hermes | TODO | — | |
@@ -76,4 +76,6 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - Identity tables use `ENABLE ROW LEVEL SECURITY`; tenant-owned business tables use `FORCE`. Pre-tenant operations go through narrow `SECURITY DEFINER` functions.
 - If a migration that was already applied locally is edited, run `make reset` before `make up`.
 - API, worker, scheduler and the migration job share one image (`seweb-crm-backend:dev`). Tests run Celery tasks inline; the real worker path is checked with scripts in `infra/e2e/` against a running stack.
+- Anything that must happen later is a row in `due_jobs` (`app.worker.due.schedule`). The scheduler claims due rows through `due_jobs_claim()`; handlers are registered in `app/worker/due.py`. Never use Celery `eta` or `countdown`.
+- Provider content passes through `SourcePolicy.storable()` before it is stored. Add a policy row before adding a source.
 - After a real import the local development database holds real prospect data. It lives only in the local Docker volume; `make reset` removes it.

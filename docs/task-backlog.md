@@ -68,12 +68,12 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-070 | Research orchestrator | Synthetic run links evidence, scores, drafts, summary; no padding | TODO |
-| CRM-071 | Licensed discovery adapter | Contract-tested; live status reported separately | TODO |
-| CRM-072 | Isolated inspection | SSRF, redirect, IPv6 and rebinding cases fail safely | TODO |
-| CRM-073 | AI score proposals | Schema violations go to review; prompt injection has no effect | TODO |
-| CRM-074 | Run controls | Pause, cancel, resume; refresh preserves outreach | TODO |
-| CRM-075 | Source and retention enforcement | Field-policy expiry and export blocking tested | TODO |
+| CRM-070 | Research orchestrator | Synthetic run links evidence, scores, drafts, summary; no padding | DONE |
+| CRM-071 | Licensed discovery adapter | Contract-tested; live status reported separately | DONE |
+| CRM-072 | Isolated inspection | SSRF, redirect, IPv6 and rebinding cases fail safely | DONE |
+| CRM-073 | AI score proposals | Schema violations go to review; prompt injection has no effect | DONE |
+| CRM-074 | Run controls | Pause, cancel, resume; refresh preserves outreach | IN_PROGRESS — refresh-existing mode not built |
+| CRM-075 | Source and retention enforcement | Field-policy expiry and export blocking tested | DONE |
 
 ## Phase 08 — internal Gmail and eligibility (P1, depends on 05, 06)
 

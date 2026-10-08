@@ -19,7 +19,7 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Gate | Status |
 |---|---|
 | Budgets atomic under concurrency | PASS (20 threads on separate connections) |
-| Synthetic research run end to end | NOT_STARTED |
+| Synthetic research run end to end | PASS (tests, and `infra/e2e/phase_b_research.py` through the real scheduler) |
 | Live research run | BLOCKED — provider, terms and budget (U-03, U-04) |
 | Gmail sync contract verified against a fake provider | NOT_STARTED |
 | Live internal Gmail connection | BLOCKED — mailbox and project ownership (U-02) |

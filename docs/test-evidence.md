@@ -236,3 +236,40 @@ What is covered:
 - OAuth connections are modelled (`access_mode = oauth`) but the first OAuth flow arrives with Gmail in phase 08.
 - Monthly budgets are per calendar month in the tenant time zone; there is no automatic carry-over or alerting before the limit is reached.
 - Encryption keys come from an environment variable. A managed key service is not integrated.
+
+## Phase 07 — 8 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 243 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 21 tests passed |
+| `docker compose exec api python /infra/e2e/phase_b_research.py` on a fresh stack | 12 checks passed through the real scheduler and worker, with local test adapters |
+
+**Status of providers: no real provider was contacted and nothing was paid for.** The Google Places adapter is contract-tested against a mocked HTTP transport only (`IMPLEMENTED`). The model adapter is a local stand-in; no model provider has been chosen (U-03). Live research is `BLOCKED`.
+
+What is covered:
+
+- **Safe fetching.** Refused before any network activity: non-http schemes, credentials in the URL, literal private, loopback, link-local and metadata addresses in IPv4 and IPv6 (including IPv4-mapped and 6to4 forms), internal host names and unusual ports. A host with any internal address among its answers is refused. Over real sockets against a local server: the connection goes to exactly the address that was checked; a name that answers publicly when checked and internally afterwards (DNS rebinding) cannot move the connection; every redirect hop is re-checked (internal IP, internal name, `file:` and loops all stop); only HTML is read, up to 1.5 MB; a failed fetch is recorded as a limitation of the automated request, never as "the site is down".
+- **Extraction** reads markup only: scripts and styles are ignored; title, language, phone and email links, booking and contact links, copyright year.
+- **Source policy.** With the default policy only a listing's place ID is stored; name, website, address, phone, rating and review count are dropped and named in `dropped_fields`. An unknown source is denied. A source cannot be made storable without being marked approved with a note saying what was verified; a database constraint enforces the same. A dump of all stored candidates contains none of the provider's names, addresses or ratings.
+- **Identity from the business's own site.** A candidate's stored name and website come from the page that was fetched. An unreadable site leaves the candidate with a place ID and nothing else.
+- **Model output validation.** An observation must quote text that is on a fetched page; a contact must literally appear on a fetched page; scores must fit the rubric (a partial score is not zero-filled); the service must be in the tenant's catalogue; unknown fields such as `actions` are ignored and reported; confidence is lowered when evidence is missing.
+- **Prompt injection.** A page instructing the model to maximise scores, email customers and reveal its key, with a stand-in model that obeys it: every injected element is rejected, the candidate goes to review, and no lead, task or message is created.
+- **A synthetic run:** four searches, seven listings, with the expected outcome for each (qualified, rejected for low score, unreadable site, no website, excluded domain not even fetched, ambiguous website match); summary with counts, score and confidence distributions, estimated cost labelled as an estimate, unreadable sites, and unsupported checks (mobile layout, visual defects, page speed).
+- **Not padded:** 2 of 10 requested candidates qualified and the summary says so.
+- **Promotion** is the human approval step: it creates the company, lead, channels with their source page, observations, hypotheses kept separate, and a score recomputed from components even when the stored total was tampered with. A business with no readable website can only be added when a person confirms it and supplies the name.
+- **Repeat runs:** an existing lead is recognised and its outreach status untouched; known candidates are neither fetched nor paid for again.
+- **Limits and controls:** stops at the qualified target and at the cost cap, listing the searches not run; pauses when the budget runs out and resumes when it is raised; pause does nothing further; cancel keeps costs already incurred and leaves nothing reserved; a provider timeout leaves that cost `unknown` and the run continues; a revoked connection pauses the run with a clear message.
+- **Scheduling:** a recurring set-up is a due row in the database with the next start in the tenant's zone (06:00 local stays 06:00 across the October clock change); running it creates a run and stores the next start; eight concurrent pollers claim 40 due rows exactly once each; a worker whose lease expired cannot act; a row delivered twice runs once; a failing handler is retried later with the delay stored in the database.
+- **Retention and export:** undecided candidates past their date are deleted, promoted ones kept; contact values from a source that does not allow export are withheld from the workbook and counted.
+- **Permissions and isolation:** representatives cannot start or cancel runs; another tenant sees nothing and cannot use this tenant's connections.
+
+**Limitations:**
+
+- **Refresh-existing mode is not built.** The API refuses it with a clear message. CRM-074 stays open for this.
+- Inspection reads the homepage only. The `site` depth setting is accepted but behaves like `homepage`.
+- `robots.txt` is not consulted yet.
+- Website-to-listing matching is a word-overlap check on the page title and text; anything uncertain goes to review.
+- The Places adapter's cost figure is a list-price ceiling entered by hand; it must be checked against current pricing before a live run.
+- Google Places terms for an EEA-billed account are still unverified (U-04), so nothing beyond the place ID is stored and review counts are not used for scoring.

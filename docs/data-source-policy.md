@@ -32,6 +32,15 @@ The earlier review quoted the global Maps Platform terms. Bulgaria is in the EEA
 
 Until then the Places adapter is contract-tested only and live discovery is `BLOCKED`.
 
+## How the policy is enforced (phase 07)
+
+- Each tenant has `source_policies` rows per source and field, seeded with the table above. A constraint prevents an unapproved source from being stored, exported or used for scoring.
+- Discovery results pass through the policy before storage. Dropped fields are listed on the candidate, so a reviewer can see what was withheld.
+- A candidate's name and website are taken from the business's own website once it has been read.
+- The export omits contact values whose source does not allow export, and counts them.
+- Candidates that nobody decides on are deleted after 30 days.
+- Changing a policy needs the settings permission, a note saying what was verified, and is audited.
+
 ## Reference workbook
 
 Stored only in `tests/fixtures/private/` (git-ignored). Its rows contain real business contacts and must not appear in commits, logs, CI output or documentation. Aggregate counts are safe to publish.

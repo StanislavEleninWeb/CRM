@@ -40,6 +40,7 @@ Sign in with one of the development users, for example `owner@example.test`, pas
 | `make check` | Everything CI runs |
 | `make smoke` | Verify a running stack: readiness, frontend-to-API, worker job, scheduler tick |
 | `docker compose exec api python /infra/e2e/phase_a.py` | End-to-end check of the call-first pilot on a fresh stack (`make reset && make up` first) |
+| `docker compose exec api python /infra/e2e/phase_b_research.py` | Research run through the real scheduler with local test adapters (fresh stack) |
 | `./infra/backup/backup.sh`, `./infra/backup/restore-check.sh <file>` | Back up the database and verify the backup restores |
 
 ## Database roles

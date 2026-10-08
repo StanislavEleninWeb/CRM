@@ -10,6 +10,7 @@ from app.core.middleware import CorrelationMiddleware
 from app.modules.crm.companies_router import router as companies_router
 from app.modules.crm.records_router import router as records_router
 from app.modules.crm.sales_router import router as sales_router
+from app.modules.discovery.router import router as discovery_router
 from app.modules.identity.auth_router import router as auth_router
 from app.modules.identity.tenant_router import router as tenant_router
 from app.modules.prospects.router import router as prospects_router
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     v1.include_router(research_router)
     v1.include_router(prospects_router)
     v1.include_router(providers_router)
+    v1.include_router(discovery_router)
     app.include_router(v1)
     return app
 

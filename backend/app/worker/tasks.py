@@ -25,3 +25,20 @@ def poll_due_rows() -> dict[str, int]:
     claimed = run_due_handlers(get_settings().due_poll_batch_size)
     redis.Redis.from_url(get_settings().redis_url).set(LAST_POLL_KEY, utcnow().isoformat(), ex=3600)
     return {"claimed": claimed}
+
+
+@celery_app.task(name="scheduler.run_due_job", max_retries=0)
+def run_due_job(job: dict[str, object]) -> str:
+    """Execute one claimed due row. Short and immediate: retries are scheduled in the database."""
+    from uuid import UUID
+
+    from app.worker.due import run_claimed
+
+    claimed = {
+        **job,
+        "id": UUID(str(job["id"])),
+        "tenant_id": UUID(str(job["tenant_id"])),
+        "ref_id": UUID(str(job["ref_id"])) if job.get("ref_id") else None,
+        "lease_token": UUID(str(job["lease_token"])),
+    }
+    return run_claimed(claimed)

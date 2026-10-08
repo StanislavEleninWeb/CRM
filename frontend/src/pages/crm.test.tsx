@@ -449,3 +449,75 @@ describe("integrations page", () => {
     await waitFor(() => expect(keyInput).toHaveValue("")); // cleared from the page once sent
   });
 });
+
+describe("research page", () => {
+  it("shows why a run fell short and adds a candidate only on request", async () => {
+    const candidate = {
+      id: "cand-1",
+      run_id: "run-1",
+      state: "qualified",
+      state_reason: null,
+      listing_id_type: "place_id",
+      listing_id: "ChIJsynthetic",
+      name: "Salon Aurora",
+      name_source: "official_website",
+      city: "Sofia",
+      category: "hair salon",
+      website_url: "https://aurora.example.bg/",
+      website_source: "official_website",
+      website_match: "confirmed",
+      duplicate_lead_id: null,
+      inspection: {},
+      proposal: {
+        observations: [{ text: "No booking option was found on the inspected pages.", evidence_url: "https://aurora.example.bg/" }],
+        hypotheses: ["Bookings may be taken by phone only."],
+        score: { total: 76, tier: "B" },
+        confidence: "medium",
+      },
+      validation_issues: [],
+      dropped_fields: ["name", "rating", "review_count"],
+      model_name: "fake-research-1",
+      prompt_version: "research-v1",
+      promoted_lead_id: null,
+      expires_at: null,
+      created_at: "2026-10-08T10:00:00Z",
+    };
+    const calls = mockApi({
+      "GET /api/v1/auth/me": () =>
+        json(makeMe({ active: { ...TENANT, permissions: [...PERMISSIONS, "research.review", "research.run"] } })),
+      "GET /api/v1/research-configs": () => json([]),
+      "GET /api/v1/research-runs": () =>
+        json(
+          page([
+            {
+              id: "run-1",
+              config_id: "cfg-1",
+              mode: "discover",
+              trigger: "manual",
+              status: "completed",
+              counters: {},
+              summary: { shortfall_note: "2 of 10 requested candidates qualified. The result is not padded.", coverage_gaps: [{}] },
+              estimated_cost: "0.1200",
+              error: null,
+              searches_total: 4,
+              searches_done: 4,
+              created_at: "2026-10-08T10:00:00Z",
+              started_at: "2026-10-08T10:00:00Z",
+              finished_at: "2026-10-08T10:01:00Z",
+            },
+          ]),
+        ),
+      "GET /api/v1/research-candidates": () => json(page([candidate])),
+      "POST /api/v1/research-candidates/cand-1/promote": () => json({ ...candidate, state: "promoted" }),
+    });
+    renderAt("/research");
+    expect(await screen.findByText("2 of 10 requested candidates qualified. The result is not padded.")).toBeInTheDocument();
+    expect(screen.getByText(/\(not a bill\)/)).toBeInTheDocument();
+    expect(await screen.findByText("Proposed: Tier B · 76")).toBeInTheDocument();
+    expect(screen.getByText(/Assumed, to confirm: Bookings may be taken by phone only\./)).toBeInTheDocument();
+    expect(screen.getByText("Not stored from the listing: name, rating, review count")).toBeInTheDocument();
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: /Add as lead/ }));
+    await waitFor(() => expect(calls.some((call) => call.path.endsWith("/promote"))).toBe(true));
+  });
+});

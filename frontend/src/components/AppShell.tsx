@@ -16,6 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Today", end: true },
   { to: "/prospects", label: "Prospects", permission: "crm.read" },
   { to: "/verification", label: "Verification", permission: "research.review" },
+  { to: "/research", label: "Research", permission: "research.review" },
   { to: "/companies", label: "Companies", permission: "crm.read" },
   { to: "/opportunities", label: "Opportunities", permission: "crm.read" },
   { to: "/tasks", label: "Tasks", permission: "crm.read" },

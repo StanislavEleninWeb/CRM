@@ -160,11 +160,15 @@ def build_export(
 ) -> tuple[bytes, dict[str, Any]]:
     """Returns the workbook bytes and the summary figures calculated from the exported rows."""
     leads = db.execute(text(EXPORT_SQL), {"t": tenant_id}).mappings().all()
+    from app.modules.discovery.policy import SourcePolicy
+
+    policy = SourcePolicy.load(db, tenant_id)
+    withheld = 0
     channels: dict[UUID, dict[str, str]] = {}
     for ch in (
         db.execute(
             text(
-                "SELECT l.id AS lead_id, ch.kind, ch.raw_value, ch.purpose, ch.label FROM contact_channels ch "
+                "SELECT l.id AS lead_id, ch.kind, ch.raw_value, ch.purpose, ch.label, ch.source_type FROM contact_channels ch "
                 "JOIN leads l ON l.tenant_id = ch.tenant_id AND l.company_id = ch.company_id "
                 "WHERE ch.tenant_id = :t ORDER BY ch.position, ch.created_at"
             ),
@@ -173,6 +177,9 @@ def build_export(
         .mappings()
         .all()
     ):
+        if not policy.may_export(ch["source_type"], ch["kind"]):
+            withheld += 1  # this source's terms do not allow the value to leave the application
+            continue
         by_kind = channels.setdefault(ch["lead_id"], {})
         existing = by_kind.get(ch["kind"])
         if ch["label"] and ch["purpose"] != "general":
@@ -290,6 +297,7 @@ def build_export(
         "with_phone": sum(1 for e in exported if e["values"][7] != NOT_FOUND),
         "with_email": sum(1 for e in exported if e["values"][8] != NOT_FOUND),
         "with_website": sum(1 for e in exported if e["row"]["website_url"]),
+        "contact_values_withheld_by_source_policy": withheld,
         "shortlist": len(ranked),
         "shortlist_fillers": sum(1 for e in ranked if e["row"]["tier"] != "A"),
         "overridden_scores": sum(1 for e in exported if e["row"]["score_origin"] == "override"),
@@ -321,6 +329,11 @@ def build_export(
             "Shown so fillers are not mistaken for Tier A leads.",
         ),
         ("Scores overridden by a reviewer", summary["overridden_scores"], "The exported score is the current one."),
+        (
+            "Contact values withheld",
+            summary["contact_values_withheld_by_source_policy"],
+            "Their source's terms do not allow export; they show as Not found here.",
+        ),
         ("Scores that differ from the imported source", summary["scores_differing_from_source"], ""),
     ]
     for r, (label, value, note) in enumerate(lines, start=1):

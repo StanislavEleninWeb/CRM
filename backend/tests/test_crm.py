@@ -745,7 +745,9 @@ def test_every_tenant_table_has_forced_row_level_security(
 ) -> None:
     """A guard for future migrations: any table with tenant_id must be isolated."""
     company(rep)
-    identity_tables = {"memberships", "invitations"}  # ENABLE, with definer access; see migration 0002
+    # ENABLE rather than FORCE, each for a documented reason: the first two are identity tables with
+    # definer access (migration 0002); due_jobs is claimed across tenants by the scheduler (migration 0007).
+    identity_tables = {"memberships", "invitations", "due_jobs"}
     with migrator_engine.connect() as conn:
         rows = conn.execute(
             text(

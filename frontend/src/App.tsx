@@ -18,6 +18,7 @@ import { NewWorkspacePage } from "./pages/NewWorkspacePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProspectPage } from "./pages/ProspectPage";
 import { ProspectsPage } from "./pages/ProspectsPage";
+import { ResearchPage } from "./pages/ResearchPage";
 import { TasksPage } from "./pages/TasksPage";
 import { TeamPage } from "./pages/TeamPage";
 import { TodayPage } from "./pages/TodayPage";
@@ -73,6 +74,7 @@ export function AppRoutes() {
               ["tasks", <TasksPage key="tasks" />],
               ["import", <ImportPage key="import" />],
               ["integrations", <IntegrationsPage key="integrations" />],
+              ["research", <ResearchPage key="research" />],
               ["prospects", <ProspectsPage key="prospects" />],
               ["verification", <ProspectsPage key="verification" verificationOnly />],
               ["prospects/:leadId", <ProspectPage key="prospect" />],

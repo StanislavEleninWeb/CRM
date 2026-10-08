@@ -47,7 +47,7 @@ ignore = ["S101", "E501", "S608", "RUF001", "RUF002", "RUF003"]
 extend-immutable-calls = ["app.core.deps.tenant_with", "fastapi.Depends", "fastapi.Query"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S105", "S106", "S608"]
+"tests/**" = ["S104", "S105", "S106", "S608", "RUF059"]
 "migrations/**" = ["S608", "E501"]
 
 [tool.mypy]
