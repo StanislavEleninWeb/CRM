@@ -141,9 +141,7 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute(
-        "CREATE INDEX ix_audit_events_tenant_time ON audit_events (tenant_id, occurred_at DESC)"
-    )
+    op.execute("CREATE INDEX ix_audit_events_tenant_time ON audit_events (tenant_id, occurred_at DESC)")
 
     # --- privileges: narrow what the runtime role may do beyond the defaults -----------------
     op.execute("REVOKE INSERT, UPDATE, DELETE ON users FROM crm_app")

@@ -66,9 +66,7 @@ def login(
     state, nonce, verifier = new_token(), new_token(), new_token(48)
     store.set(
         _login_key(state),
-        json.dumps(
-            {"nonce": nonce, "verifier": verifier, "return_to": _safe_return_path(return_to)}
-        ),
+        json.dumps({"nonce": nonce, "verifier": verifier, "return_to": _safe_return_path(return_to)}),
         ex=LOGIN_TTL_SECONDS,
     )
     url = oidc.authorization_url(state=state, nonce=nonce, code_challenge=pkce_challenge(verifier))
@@ -78,9 +76,7 @@ def login(
     return response
 
 
-@router.get(
-    "/callback", operation_id="loginCallback", status_code=303, response_class=RedirectResponse
-)
+@router.get("/callback", operation_id="loginCallback", status_code=303, response_class=RedirectResponse)
 def callback(
     request: Request,
     oidc: Annotated[OidcClient, Depends(get_oidc_client)],
@@ -139,18 +135,14 @@ def callback(
 
 @router.post("/logout", operation_id="logout", status_code=204)
 def logout(principal: CurrentPrincipal, db: UserSession, response: Response) -> None:
-    db.execute(
-        text("UPDATE sessions SET revoked_at = now() WHERE id = :id"), {"id": principal.session_id}
-    )
+    db.execute(text("UPDATE sessions SET revoked_at = now() WHERE id = :id"), {"id": principal.session_id})
     clear_cookie(response, SESSION_COOKIE)
     clear_cookie(response, CSRF_COOKIE)
 
 
 @router.get("/me", response_model=Me, operation_id="getMe")
 def me(principal: CurrentPrincipal, db: UserSession) -> Me:
-    user = db.execute(
-        text("SELECT id, email, display_name FROM users WHERE id = :id"), {"id": principal.user_id}
-    ).one()
+    user = db.execute(text("SELECT id, email, display_name FROM users WHERE id = :id"), {"id": principal.user_id}).one()
     tenants = db.execute(
         text(
             """
@@ -226,10 +218,7 @@ def list_sessions(principal: CurrentPrincipal, db: UserSession) -> Page[SessionO
 @router.delete("/sessions/{session_id}", status_code=204, operation_id="revokeSession")
 def revoke_session(session_id: UUID, db: UserSession) -> None:
     updated = db.execute(
-        text(
-            "UPDATE sessions SET revoked_at = now() "
-            "WHERE id = :id AND revoked_at IS NULL RETURNING id"
-        ),
+        text("UPDATE sessions SET revoked_at = now() WHERE id = :id AND revoked_at IS NULL RETURNING id"),
         {"id": session_id},
     ).scalar_one_or_none()
     if updated is None:

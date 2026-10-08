@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core` (local commits only; not pushed) |
-| Last completed phase | 02 |
-| Next action | Phase 03: CRM-030 companies, contacts, contact channels, leads and deals |
+| Last completed phase | 03 |
+| Next action | Phase 04: CRM-040 research schema, then the deterministic rubric and the XLSX importer |
 
 ## Phases
 
@@ -18,7 +18,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 00 Scope, repository, decisions | DONE | see `git log` (`Phase 00`) | Docs only; no application code |
 | 01 Executable foundation | DONE | see `git log` (`Phase 01`) | Tenant isolation and identity are not part of this phase |
 | 02 Identity, tenancy, roles, isolation | DONE | see `git log` (`Phase 02`) | Production identity provider and MFA verification remain BLOCKED (U-01) |
-| 03 Core CRM and history | TODO | — | |
+| 03 Core CRM and history | DONE | see `git log` (`Phase 03`) | Lead list and lead-detail screens arrive with the prospect workspace in phase 05 |
 | 04 Research schema, scoring, import/export | TODO | — | |
 | 05 Prospect review, shortlist, calls | TODO | — | |
 | 06 Provider connections and usage | TODO | — | |

@@ -77,3 +77,36 @@ What is covered:
 - Cross-tenant link tests currently cover the one tenant-aware foreign key that exists (invitation inviter). CRM relationships arrive in phase 03 and get the same tests there.
 - Invitation links are shown to the inviter to send by hand; the application sends no email.
 - There is no sign-in rate limiting yet; it is provided by the identity provider.
+
+## Phase 03 — 8 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (PostgreSQL as `crm_app`, Redis, Dex, SeaweedFS S3) | 89 passed |
+| `ruff check`, `ruff format --check`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 14 tests passed |
+| Migration `0003` upgrade, downgrade to `0002`, upgrade | Clean |
+
+What is covered:
+
+- **Main journey as a representative:** company, contact, phone and email channels, lead, qualification, conversion to an opportunity, stage changes with history, next action, note, task, tags, and the resulting timeline.
+- **Leads and deals stay separate:** a lead needs no named person; disqualifying needs a reason; a converted lead cannot be converted again; a lost opportunity needs a reason.
+- **Money:** tenant currency (EUR) is the default; conversion provenance must be complete; negative and over-precise amounts are rejected.
+- **Phone handling:** raw value kept; international form only when the country is known; emergency numbers get no dial link; delivery and booking purposes are kept.
+- **Restrictions:** a do-not-contact flag needs a reason, cannot be erased by deleting the channel, and only a manager can lift it; a company-level restriction blocks existing and later-added numbers; lifted restrictions stay in history; both are audited.
+- **Permissions:** read-only members cannot change any CRM record; representatives cannot delete, bulk-edit, manage pipelines, or assign records to others.
+- **Bulk actions:** preview by default, report missing IDs, and are reversible (archive and unarchive).
+- **Lists:** 230 rows paged without overlap; case-insensitive filters; search wildcards treated literally; page size capped; an injected sort value is rejected.
+- **Duplicates:** suggestions by shared phone, shared domain, and similar name in the same city; a same-domain record in another city is flagged as a possible branch; nothing merges automatically.
+- **Merging:** contacts, leads, deals, tasks, notes, files, tags, timeline and restrictions all move to the surviving company; a shared phone keeps the stricter do-not-contact state; blanks are filled without overwriting; a repeat merge is refused.
+- **Files:** stored in S3-compatible storage under a tenant prefix; path components stripped from names; type and 20 MB size limits; downloads streamed by the API with `nosniff`, `attachment` and `no-store`.
+- **Isolation through the API:** every CRM read, write, nested create, merge and conversion against another tenant's record returns 404; linking one's own record to another tenant's record returns 422; bulk actions match nothing.
+- **Isolation in the database, as `crm_app`:** nine composite foreign keys refuse cross-tenant links; a cross-tenant insert is refused by policy; timeline entries cannot be rewritten and restrictions cannot be deleted.
+- **Schema guard:** every table that has a `tenant_id` column must have it `NOT NULL`, row-level security enabled and forced, and at least one policy. This test will fail for any future table that forgets.
+
+**Limitations:**
+
+- Duplicate detection compares one company against up to 500 others on demand; there is no background duplicate scan.
+- Uploaded files are checked by declared content type and size only; there is no malware scanning.
+- Storage was verified against SeaweedFS locally; no cloud S3 provider has been exercised.
+- The lead list and lead actions exist in the API; their screens come with the prospect workspace in phase 05.

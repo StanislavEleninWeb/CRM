@@ -97,19 +97,9 @@ def test_unsafe_requests_need_the_csrf_token(client: TestClient) -> None:
     sign_in(client, "owner@example.test")
     good = client.headers.pop("X-CSRF-Token")
     assert client.post(f"{API}/tenants", json={"name": "Acme"}).status_code == 403
-    assert (
-        client.post(
-            f"{API}/tenants", json={"name": "Acme"}, headers={"X-CSRF-Token": "nope"}
-        ).status_code
-        == 403
-    )
+    assert client.post(f"{API}/tenants", json={"name": "Acme"}, headers={"X-CSRF-Token": "nope"}).status_code == 403
     assert client.get(f"{API}/auth/me").status_code == 200  # safe methods are unaffected
-    assert (
-        client.post(
-            f"{API}/tenants", json={"name": "Acme"}, headers={"X-CSRF-Token": good}
-        ).status_code
-        == 201
-    )
+    assert client.post(f"{API}/tenants", json={"name": "Acme"}, headers={"X-CSRF-Token": good}).status_code == 201
 
 
 def test_logout_revokes_the_session(client: TestClient) -> None:
@@ -326,6 +316,7 @@ def test_development_provider_is_refused_in_production() -> None:
         "oidc_issuer": "https://idp.example.test",
         "oidc_client_secret": "real-secret",
         "oidc_dev_provider": False,
+        "s3_secret_key": "real-storage-secret",
     }
     Settings(**base)  # type: ignore[arg-type]
     with pytest.raises(ValidationError):

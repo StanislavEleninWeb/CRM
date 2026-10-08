@@ -78,12 +78,8 @@ def test_same_named_workspaces_do_not_see_each_other(
 
     assert [m["email"] for m in alice.get(f"{API}/members").json()["items"]] == [OWNER]
     assert [m["email"] for m in bob.get(f"{API}/members").json()["items"]] == [OTHER]
-    assert [i["email"] for i in alice.get(f"{API}/invitations").json()["items"]] == [
-        "new-a@example.test"
-    ]
-    assert [i["email"] for i in bob.get(f"{API}/invitations").json()["items"]] == [
-        "new-b@example.test"
-    ]
+    assert [i["email"] for i in alice.get(f"{API}/invitations").json()["items"]] == ["new-a@example.test"]
+    assert [i["email"] for i in bob.get(f"{API}/invitations").json()["items"]] == ["new-b@example.test"]
     assert alice.get(f"{API}/tenant").json()["id"] == tenant_a
     assert [t["id"] for t in bob.get(f"{API}/auth/me").json()["tenants"]] == [tenant_b]
     for event in bob.get(f"{API}/audit-events").json()["items"]:
@@ -96,9 +92,7 @@ def test_a_forged_tenant_header_changes_nothing(
     _alice, tenant_a, bob, tenant_b = two_tenants
     forged = {"X-Tenant-ID": tenant_a, "X-Tenant": tenant_a, "Tenant-Id": tenant_a}
     assert bob.get(f"{API}/tenant", headers=forged).json()["id"] == tenant_b
-    assert [m["email"] for m in bob.get(f"{API}/members", headers=forged).json()["items"]] == [
-        OTHER
-    ]
+    assert [m["email"] for m in bob.get(f"{API}/members", headers=forged).json()["items"]] == [OTHER]
     assert bob.get(f"{API}/members", params={"tenant_id": tenant_a}).json()["total"] == 1
 
 
@@ -116,9 +110,7 @@ def test_cross_tenant_writes_fail(two_tenants: tuple[TestClient, str, TestClient
     alice, _tenant_a, bob, _tenant_b = two_tenants
     invitation_a = invite(alice, "new-a@example.test", "representative")
     assert bob.delete(f"{API}/invitations/{invitation_a['id']}").status_code == 404
-    assert (
-        bob.patch(f"{API}/members/{_user_id(alice)}", json={"role": "read_only"}).status_code == 404
-    )
+    assert bob.patch(f"{API}/members/{_user_id(alice)}", json={"role": "read_only"}).status_code == 404
     assert bob.delete(f"{API}/members/{_user_id(alice)}").status_code == 404
     assert alice.get(f"{API}/invitations").json()["items"][0]["status"] == "pending"
     assert alice.get(f"{API}/members").json()["items"][0]["role"] == "owner"
@@ -202,19 +194,13 @@ def test_policies_block_cross_tenant_reads_writes_and_links(
         "INSERT INTO invitations (tenant_id, email, role, token_hash, expires_at) "
         "VALUES (:a, 'x@example.test', 'owner', '\\x01', now() + interval '1 day')",
         "INSERT INTO memberships (tenant_id, user_id, role) VALUES (:a, :ub, 'owner')",
-        "INSERT INTO audit_events (tenant_id, actor_type, action, target_type) "
-        "VALUES (:a, 'system', 'x', 'y')",
+        "INSERT INTO audit_events (tenant_id, actor_type, action, target_type) VALUES (:a, 'system', 'x', 'y')",
     ):
         with pytest.raises(DBAPIError, match="row-level security"):
             as_bob(statement, a=tenant_a, ub=user_b)
 
     # Updates and deletes aimed at another tenant match no rows.
-    assert (
-        as_bob(
-            "UPDATE memberships SET role = 'read_only' WHERE tenant_id = :a", a=tenant_a
-        ).rowcount
-        == 0
-    )
+    assert as_bob("UPDATE memberships SET role = 'read_only' WHERE tenant_id = :a", a=tenant_a).rowcount == 0
     assert as_bob("DELETE FROM invitations WHERE tenant_id = :a", a=tenant_a).rowcount == 0
     assert as_bob("UPDATE tenants SET name = 'hacked' WHERE id = :a", a=tenant_a).rowcount == 0
 
@@ -298,21 +284,9 @@ def test_definer_functions_cannot_be_used_to_enumerate(
     token = invite(alice, "new-a@example.test", "representative")["token"]
     with app_engine.begin() as conn:
         _ctx(conn, user=_user_id(bob))
-        assert (
-            conn.execute(
-                text("SELECT count(*) FROM invitation_peek(:h)"), {"h": b"\x00" * 32}
-            ).scalar()
-            == 0
-        )
-        assert (
-            conn.execute(
-                text("SELECT count(*) FROM auth_lookup_session(:h)"), {"h": b"\x00" * 32}
-            ).scalar()
-            == 0
-        )
-        peek = conn.execute(
-            text("SELECT * FROM invitation_peek(:h)"), {"h": hash_token(token)}
-        ).one()
+        assert conn.execute(text("SELECT count(*) FROM invitation_peek(:h)"), {"h": b"\x00" * 32}).scalar() == 0
+        assert conn.execute(text("SELECT count(*) FROM auth_lookup_session(:h)"), {"h": b"\x00" * 32}).scalar() == 0
+        peek = conn.execute(text("SELECT * FROM invitation_peek(:h)"), {"h": hash_token(token)}).one()
         assert set(peek._mapping) == {"tenant_name", "email", "role", "status"}  # no identifiers
     with app_engine.begin() as conn, pytest.raises(DBAPIError, match="authenticated user"):
         conn.execute(text("SELECT tenant_create('anonymous')"))  # no user context
@@ -335,9 +309,7 @@ def test_invitation_token_is_shown_once_and_stored_hashed(
     assert stored == hash_token(created["token"]) and created["token"].encode() not in stored
 
 
-def test_accepting_an_invitation(
-    two_tenants: tuple[TestClient, str, TestClient, str], make_client: Any
-) -> None:
+def test_accepting_an_invitation(two_tenants: tuple[TestClient, str, TestClient, str], make_client: Any) -> None:
     alice, tenant_a, _bob, _tenant_b = two_tenants
     token = invite(alice, REP, "representative")["token"]
     peek = make_client().get(f"{API}/invitations/lookup", params={"token": token}).json()
@@ -355,9 +327,7 @@ def test_accepting_an_invitation(
     # Single use.
     assert rep.post(f"{API}/invitations/accept", json={"token": token}).status_code == 409
     assert alice.get(f"{API}/invitations").json()["items"][0]["status"] == "accepted"
-    assert "invitation.accepted" in [
-        e["action"] for e in alice.get(f"{API}/audit-events").json()["items"]
-    ]
+    assert "invitation.accepted" in [e["action"] for e in alice.get(f"{API}/audit-events").json()["items"]]
 
 
 def test_invitation_for_a_different_email_is_refused(
@@ -381,15 +351,11 @@ def test_expired_revoked_and_unknown_invitations_fail(
     expired = invite(alice, REP, "representative")
     with migrator_engine.begin() as conn:
         conn.execute(text("UPDATE invitations SET expires_at = now() - interval '1 minute'"))
-    assert (
-        rep.post(f"{API}/invitations/accept", json={"token": expired["token"]}).status_code == 409
-    )
+    assert rep.post(f"{API}/invitations/accept", json={"token": expired["token"]}).status_code == 409
 
     revoked = invite(alice, REP, "representative")
     assert alice.delete(f"{API}/invitations/{revoked['id']}").status_code == 204
-    assert (
-        rep.post(f"{API}/invitations/accept", json={"token": revoked["token"]}).status_code == 409
-    )
+    assert rep.post(f"{API}/invitations/accept", json={"token": revoked["token"]}).status_code == 409
     assert alice.delete(f"{API}/invitations/{revoked['id']}").status_code == 404
 
     assert rep.post(f"{API}/invitations/accept", json={"token": "z" * 43}).status_code == 404
@@ -460,9 +426,7 @@ def test_only_managers_of_members_can_invite_or_change_roles(team: dict[str, Tes
         body = {"email": "x@example.test", "role": "read_only"}
         assert member.post(f"{API}/invitations", json=body).status_code == 403, role
         assert member.get(f"{API}/invitations").status_code == 403, role
-        assert member.patch(f"{API}/members/{target}", json={"role": "owner"}).status_code == 403, (
-            role
-        )
+        assert member.patch(f"{API}/members/{target}", json={"role": "owner"}).status_code == 403, role
         assert member.delete(f"{API}/members/{target}").status_code == 403, role
         assert member.patch(f"{API}/tenant", json={"name": "Renamed"}).status_code == 403, role
         assert member.get(f"{API}/audit-events").status_code == 403, role
@@ -473,9 +437,7 @@ def test_only_managers_of_members_can_invite_or_change_roles(team: dict[str, Tes
 def test_a_member_cannot_escalate_their_own_role(team: dict[str, TestClient]) -> None:
     for role in ("read_only", "representative", "sales_manager", "administrator"):
         me = _user_id(team[role])
-        assert team[role].patch(f"{API}/members/{me}", json={"role": "owner"}).status_code == 403, (
-            role
-        )
+        assert team[role].patch(f"{API}/members/{me}", json={"role": "owner"}).status_code == 403, role
     roles = {m["email"]: m["role"] for m in team["owner"].get(f"{API}/members").json()["items"]}
     assert roles[ADMIN] == "administrator" and roles[VIEWER] == "read_only"
 
@@ -487,22 +449,9 @@ def test_administrator_manages_everyone_except_owners(team: dict[str, TestClient
     assert admin.patch(f"{API}/members/{rep_id}", json={"role": "owner"}).status_code == 403
     assert admin.patch(f"{API}/members/{owner_id}", json={"role": "read_only"}).status_code == 403
     assert admin.delete(f"{API}/members/{owner_id}").status_code == 403
-    assert (
-        admin.post(
-            f"{API}/invitations", json={"email": "o@example.test", "role": "owner"}
-        ).status_code
-        == 403
-    )
-    assert (
-        admin.post(
-            f"{API}/invitations", json={"email": "r@example.test", "role": "read_only"}
-        ).status_code
-        == 201
-    )
-    assert (
-        admin.patch(f"{API}/tenant", json={"timezone": "Europe/Berlin"}).json()["timezone"]
-        == "Europe/Berlin"
-    )
+    assert admin.post(f"{API}/invitations", json={"email": "o@example.test", "role": "owner"}).status_code == 403
+    assert admin.post(f"{API}/invitations", json={"email": "r@example.test", "role": "read_only"}).status_code == 201
+    assert admin.patch(f"{API}/tenant", json={"timezone": "Europe/Berlin"}).json()["timezone"] == "Europe/Berlin"
     assert admin.patch(f"{API}/tenant", json={"timezone": "Mars/Olympus"}).status_code == 422
     events = admin.get(f"{API}/audit-events").json()["items"]
     changed = next(e for e in events if e["action"] == "member.role_changed")
@@ -527,15 +476,11 @@ def test_read_only_members_cannot_mutate_anything(team: dict[str, TestClient]) -
 def test_the_last_owner_cannot_be_removed_or_demoted(team: dict[str, TestClient]) -> None:
     owner = team["owner"]
     owner_id, admin_id = _user_id(owner), _user_id(team["administrator"])
-    assert (
-        owner.patch(f"{API}/members/{owner_id}", json={"role": "administrator"}).status_code == 409
-    )
+    assert owner.patch(f"{API}/members/{owner_id}", json={"role": "administrator"}).status_code == 409
     assert owner.delete(f"{API}/members/{owner_id}").status_code == 409
     # With a second owner, the first may step down.
     assert owner.patch(f"{API}/members/{admin_id}", json={"role": "owner"}).status_code == 200
-    assert (
-        owner.patch(f"{API}/members/{owner_id}", json={"role": "administrator"}).status_code == 200
-    )
+    assert owner.patch(f"{API}/members/{owner_id}", json={"role": "administrator"}).status_code == 200
     assert owner.patch(f"{API}/members/{admin_id}", json={"role": "read_only"}).status_code == 403
     new_owner = team["administrator"]
     assert new_owner.delete(f"{API}/members/{admin_id}").status_code == 409

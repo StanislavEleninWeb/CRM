@@ -6,7 +6,7 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 
 | Gate | Status |
 |---|---|
-| Two-tenant isolation verified as the runtime database role | PASS for identity tables (phase 02); CRM tables follow in phase 03 |
+| Two-tenant isolation verified as the runtime database role | PASS for identity and CRM tables (phases 02–03); re-verified for each later phase by the schema guard test |
 | Reference workbook import: all fixture assertions | NOT_STARTED |
 | Deterministic scoring reproduces tiers and boundaries | NOT_STARTED |
 | Import → score → queue → call outcome → follow-up end to end | NOT_STARTED |

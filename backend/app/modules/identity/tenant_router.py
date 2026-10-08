@@ -53,9 +53,7 @@ def create_tenant(body: TenantCreate, principal: CurrentPrincipal, db: UserSessi
         text("UPDATE sessions SET active_tenant_id = :t WHERE id = :id"),
         {"t": tenant_id, "id": principal.session_id},
     )
-    row = db.execute(
-        text("SELECT id, name, currency, timezone FROM tenants WHERE id = :id"), {"id": tenant_id}
-    ).one()
+    row = db.execute(text("SELECT id, name, currency, timezone FROM tenants WHERE id = :id"), {"id": tenant_id}).one()
     return TenantOut(id=row.id, name=row.name, currency=row.currency, timezone=row.timezone)
 
 
@@ -69,9 +67,7 @@ def get_tenant(ctx: Tenant) -> TenantOut:
 
 
 @router.patch("/tenant", response_model=TenantOut, operation_id="updateTenant")
-def update_tenant(
-    body: TenantUpdate, ctx: TenantContext = tenant_with(Permission.TENANT_SETTINGS)
-) -> TenantOut:
+def update_tenant(body: TenantUpdate, ctx: TenantContext = tenant_with(Permission.TENANT_SETTINGS)) -> TenantOut:
     changes = body.model_dump(exclude_unset=True, exclude_none=True)
     if changes:
         assignments = ", ".join(f"{column} = :{column}" for column in changes)  # fixed field names
@@ -95,9 +91,7 @@ def update_tenant(
 
 
 @router.get("/members", response_model=Page[MemberOut], operation_id="listMembers")
-def list_members(
-    paging: Paging, ctx: TenantContext = tenant_with(Permission.MEMBERS_READ)
-) -> Page[MemberOut]:
+def list_members(paging: Paging, ctx: TenantContext = tenant_with(Permission.MEMBERS_READ)) -> Page[MemberOut]:
     total = ctx.db.execute(
         text("SELECT count(*) FROM memberships WHERE tenant_id = :t"), {"t": ctx.tenant_id}
     ).scalar_one()
@@ -177,9 +171,7 @@ def update_member(
 
 
 @router.delete("/members/{user_id}", status_code=204, operation_id="removeMember")
-def remove_member(
-    user_id: UUID, ctx: TenantContext = tenant_with(Permission.MEMBERS_MANAGE)
-) -> None:
+def remove_member(user_id: UUID, ctx: TenantContext = tenant_with(Permission.MEMBERS_MANAGE)) -> None:
     current = _member_role(ctx, user_id)
     if not can_assign_role(ctx.role, current=current, new=None):
         raise PermissionDeniedError("Only an owner can remove an owner.")
@@ -292,9 +284,7 @@ def create_invitation(
 
 
 @router.delete("/invitations/{invitation_id}", status_code=204, operation_id="revokeInvitation")
-def revoke_invitation(
-    invitation_id: UUID, ctx: TenantContext = tenant_with(Permission.MEMBERS_MANAGE)
-) -> None:
+def revoke_invitation(invitation_id: UUID, ctx: TenantContext = tenant_with(Permission.MEMBERS_MANAGE)) -> None:
     revoked = ctx.db.execute(
         text(
             """
@@ -321,24 +311,16 @@ def revoke_invitation(
 def peek_invitation(token: Annotated[str, Query(min_length=20, max_length=200)]) -> InvitationPeek:
     """Public: lets an invited person see what they are accepting. Needs the exact token."""
     with session_scope() as db:
-        row = (
-            db.execute(text("SELECT * FROM invitation_peek(:h)"), {"h": hash_token(token)})
-            .mappings()
-            .one_or_none()
-        )
+        row = db.execute(text("SELECT * FROM invitation_peek(:h)"), {"h": hash_token(token)}).mappings().one_or_none()
     if row is None:
         raise NotFoundError("Invitation not found.")
     return InvitationPeek(**row)
 
 
 @router.post("/invitations/accept", response_model=TenantOut, operation_id="acceptInvitation")
-def accept_invitation(
-    body: InvitationAccept, principal: CurrentPrincipal, db: UserSession
-) -> TenantOut:
+def accept_invitation(body: InvitationAccept, principal: CurrentPrincipal, db: UserSession) -> TenantOut:
     try:
-        tenant_id = db.execute(
-            text("SELECT invitation_accept(:h)"), {"h": hash_token(body.token)}
-        ).scalar_one()
+        tenant_id = db.execute(text("SELECT invitation_accept(:h)"), {"h": hash_token(body.token)}).scalar_one()
     except (DBAPIError, IntegrityError) as exc:
         state = _sqlstate(exc)
         if state == "P0002":
@@ -346,17 +328,13 @@ def accept_invitation(
         if state == "55000":
             raise ConflictError("This invitation has expired or was already used.") from exc
         if state == "42501":
-            raise PermissionDeniedError(
-                "This invitation was sent to a different email address."
-            ) from exc
+            raise PermissionDeniedError("This invitation was sent to a different email address.") from exc
         raise AppError("The invitation could not be accepted.") from exc
     db.execute(
         text("UPDATE sessions SET active_tenant_id = :t WHERE id = :id"),
         {"t": tenant_id, "id": principal.session_id},
     )
-    row = db.execute(
-        text("SELECT id, name, currency, timezone FROM tenants WHERE id = :id"), {"id": tenant_id}
-    ).one()
+    row = db.execute(text("SELECT id, name, currency, timezone FROM tenants WHERE id = :id"), {"id": tenant_id}).one()
     return TenantOut(id=row.id, name=row.name, currency=row.currency, timezone=row.timezone)
 
 
@@ -364,9 +342,7 @@ def accept_invitation(
 
 
 @router.get("/audit-events", response_model=Page[AuditEventOut], operation_id="listAuditEvents")
-def list_audit_events(
-    paging: Paging, ctx: TenantContext = tenant_with(Permission.AUDIT_READ)
-) -> Page[AuditEventOut]:
+def list_audit_events(paging: Paging, ctx: TenantContext = tenant_with(Permission.AUDIT_READ)) -> Page[AuditEventOut]:
     total = ctx.db.execute(
         text("SELECT count(*) FROM audit_events WHERE tenant_id = :t"), {"t": ctx.tenant_id}
     ).scalar_one()

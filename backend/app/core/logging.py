@@ -22,18 +22,13 @@ def redact_value(value: Any) -> Any:
         value = _BEARER.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
         return _URL_CREDENTIALS.sub(lambda m: f"{m.group('scheme')}{REDACTED}@", value)
     if isinstance(value, dict):
-        return {
-            k: (REDACTED if _SENSITIVE_KEY.search(str(k)) else redact_value(v))
-            for k, v in value.items()
-        }
+        return {k: (REDACTED if _SENSITIVE_KEY.search(str(k)) else redact_value(v)) for k, v in value.items()}
     if isinstance(value, list | tuple):
         return [redact_value(v) for v in value]
     return value
 
 
-def redact_processor(
-    _logger: Any, _method: str, event_dict: MutableMapping[str, Any]
-) -> MutableMapping[str, Any]:
+def redact_processor(_logger: Any, _method: str, event_dict: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
     for key in list(event_dict):
         if _SENSITIVE_KEY.search(key):
             event_dict[key] = REDACTED

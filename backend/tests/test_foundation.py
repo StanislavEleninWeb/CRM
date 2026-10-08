@@ -20,9 +20,7 @@ def test_readiness_reports_database_and_redis(client: TestClient) -> None:
     assert response.json() == {"status": "ready", "checks": {"database": "ok", "redis": "ok"}}
 
 
-def test_readiness_fails_when_database_is_unreachable(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_readiness_fails_when_database_is_unreachable(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.core import db
 
     broken = create_engine("postgresql+psycopg://crm_app:wrong@127.0.0.1:1/none")
@@ -40,10 +38,7 @@ def test_runtime_role_cannot_bypass_rls_or_alter_schema() -> None:
     engine = create_engine(os.environ["DATABASE_URL"])
     with engine.connect() as conn:
         row = conn.execute(
-            text(
-                "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles "
-                "WHERE rolname = current_user"
-            )
+            text("SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
         ).one()
         assert row.current_user == "crm_app"
         assert row.rolsuper is False

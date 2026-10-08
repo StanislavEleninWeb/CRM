@@ -78,14 +78,8 @@ def _correlation_id() -> str | None:
     return str(value) if value else None
 
 
-def _response(
-    status: int, code: str, message: str, details: list[dict[str, Any]] | None = None
-) -> JSONResponse:
-    body = ErrorEnvelope(
-        error=ErrorBody(
-            code=code, message=message, details=details, correlation_id=_correlation_id()
-        )
-    )
+def _response(status: int, code: str, message: str, details: list[dict[str, Any]] | None = None) -> JSONResponse:
+    body = ErrorEnvelope(error=ErrorBody(code=code, message=message, details=details, correlation_id=_correlation_id()))
     return JSONResponse(status_code=status, content=body.model_dump(exclude_none=True))
 
 
@@ -102,8 +96,7 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
         details = [
-            {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"], "type": e["type"]}
-            for e in exc.errors()
+            {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"], "type": e["type"]} for e in exc.errors()
         ]
         return _response(422, "validation_error", "Request validation failed", details)
 

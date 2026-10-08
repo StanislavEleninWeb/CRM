@@ -16,6 +16,8 @@ dependencies = [
     "structlog>=24.4",
     "pyjwt[crypto]>=2.10",
     "httpx>=0.27",
+    "boto3>=1.35",
+    "python-multipart>=0.0.12",
 ]
 
 [dependency-groups]
@@ -29,12 +31,12 @@ dev = [
 package = false
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
-ignore = ["S101"]
+ignore = ["S101", "E501"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["app.core.deps.tenant_with", "fastapi.Depends", "fastapi.Query"]
@@ -50,7 +52,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "kombu.*"]
+module = ["celery.*", "kombu.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

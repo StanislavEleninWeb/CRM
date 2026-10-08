@@ -32,10 +32,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-030 | Companies, contacts, contact channels, leads, deals, restrictions | Cross-tenant links fail in database and API; emergency numbers excluded from dialling | TODO |
-| CRM-031 | Pipelines, stages, tasks, next actions | Lead converts to opportunity; stage history kept | TODO |
-| CRM-032 | Activity timeline and audit events | History survives edits and merges | TODO |
-| CRM-033 | Search, filters, saved views, files | Pagination and filtering work at volume; file URLs cannot cross tenants | TODO |
+| CRM-030 | Companies, contacts, contact channels, leads, deals, restrictions | Cross-tenant links fail in database and API; emergency numbers excluded from dialling | DONE |
+| CRM-031 | Pipelines, stages, tasks, next actions | Lead converts to opportunity; stage history kept | DONE |
+| CRM-032 | Activity timeline and audit events | History survives edits and merges | DONE |
+| CRM-033 | Search, filters, saved views, files | Pagination and filtering work at volume; file URLs cannot cross tenants | DONE |
 
 ## Phase 04 — research schema, scoring, import and export (P1, depends on 03)
 

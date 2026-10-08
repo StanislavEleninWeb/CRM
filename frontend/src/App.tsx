@@ -8,9 +8,13 @@ import { AppShell } from "./components/AppShell";
 import { ErrorState, Loading } from "./components/States";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { AccountPage } from "./pages/AccountPage";
+import { CompaniesPage } from "./pages/CompaniesPage";
+import { CompanyPage } from "./pages/CompanyPage";
+import { DealsPage } from "./pages/DealsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewWorkspacePage } from "./pages/NewWorkspacePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { TasksPage } from "./pages/TasksPage";
 import { TeamPage } from "./pages/TeamPage";
 import { TodayPage } from "./pages/TodayPage";
 
@@ -57,6 +61,16 @@ export function AppRoutes() {
               </RequireWorkspace>
             }
           />
+          {(
+            [
+              ["companies", <CompaniesPage key="companies" />],
+              ["companies/:companyId", <CompanyPage key="company" />],
+              ["opportunities", <DealsPage key="deals" />],
+              ["tasks", <TasksPage key="tasks" />],
+            ] as const
+          ).map(([path, element]) => (
+            <Route key={path} path={path} element={<RequireWorkspace>{element}</RequireWorkspace>} />
+          ))}
           <Route
             path="team"
             element={

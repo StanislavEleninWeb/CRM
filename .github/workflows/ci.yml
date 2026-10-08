@@ -24,8 +24,8 @@ jobs:
         run: cp .env.example .env
       - name: Build backend image
         run: docker compose build api
-      - name: Start PostgreSQL, Redis and the development identity provider
-        run: docker compose up -d --wait db redis oidc
+      - name: Start PostgreSQL, Redis, object storage and the development identity provider
+        run: docker compose up -d --wait db redis oidc storage
       - name: Lint
         run: docker compose run --rm -T api sh -c "ruff check . && ruff format --check ."
       - name: Type-check

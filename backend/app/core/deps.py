@@ -82,9 +82,7 @@ def get_oidc_client() -> OidcClient:
 
 def lookup_session(token: str) -> Principal | None:
     with session_scope() as session:
-        row = session.execute(
-            text("SELECT * FROM auth_lookup_session(:h)"), {"h": hash_token(token)}
-        ).one_or_none()
+        row = session.execute(text("SELECT * FROM auth_lookup_session(:h)"), {"h": hash_token(token)}).one_or_none()
     if row is None:
         return None
     return Principal(

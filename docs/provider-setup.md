@@ -10,7 +10,7 @@ Configuration and verification instructions. No secrets belong in this file. Sta
 | Google Places API | Business discovery | NOT_STARTED | U-04 for live use |
 | AI model provider | Score proposals and drafts | NOT_STARTED | U-03 for live use |
 | Stripe Billing (test mode) | Subscriptions | NOT_STARTED | U-08 |
-| S3-compatible storage | Files and exports | NOT_STARTED | — |
+| S3-compatible storage | Files and exports | VERIFIED_LOCALLY (SeaweedFS) | Production bucket not chosen |
 
 Setup steps are added to this file as each provider is implemented.
 

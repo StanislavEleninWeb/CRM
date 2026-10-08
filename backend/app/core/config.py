@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     session_ttl_hours: int = Field(default=12, ge=1, le=24 * 30)
     invitation_ttl_hours: int = Field(default=72, ge=1, le=24 * 30)
 
+    s3_endpoint_url: str = ""
+    s3_bucket: str = "crm-local"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_region: str = "us-east-1"
+
     default_currency: str = Field(default="EUR", pattern=r"^[A-Z]{3}$")
     default_timezone: str = "Europe/Sofia"
 
@@ -57,7 +63,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _no_placeholders_outside_development(self) -> "Settings":
         if self.environment in ("staging", "production"):
-            for name in ("session_secret", "database_url", "oidc_client_secret"):
+            for name in ("session_secret", "database_url", "oidc_client_secret", "s3_secret_key"):
                 if PLACEHOLDER_PREFIX in str(getattr(self, name)):
                     raise ValueError(f"{name} still contains a placeholder value")
             if self.oidc_dev_provider:

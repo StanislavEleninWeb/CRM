@@ -13,6 +13,7 @@ x-backend: &backend
     db: {condition: service_healthy}
     redis: {condition: service_healthy}
     oidc: {condition: service_healthy}
+    storage: {condition: service_healthy}
   networks: [internal]
 
 services:
@@ -56,6 +57,20 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks: [internal]
+
+  storage:
+    # S3-compatible object storage for local development and tests.
+    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-s3", "-s3.port=9000", "-s3.config=/etc/seaweedfs/s3.json", "-volume.max=20", "-master.volumeSizeLimitMB=256"]
+    volumes:
+      - storage-data:/data
+      - ./infra/seaweedfs/s3.dev.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9333 && nc -z localhost 9000"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     networks: [internal]
 
   migrate:
@@ -107,6 +122,7 @@ services:
 
 volumes:
   db-data:
+  storage-data:
   frontend-node-modules:
 
 networks:

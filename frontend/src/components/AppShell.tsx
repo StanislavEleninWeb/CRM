@@ -14,6 +14,9 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Today", end: true },
+  { to: "/companies", label: "Companies", permission: "crm.read" },
+  { to: "/opportunities", label: "Opportunities", permission: "crm.read" },
+  { to: "/tasks", label: "Tasks", permission: "crm.read" },
   { to: "/team", label: "Team", permission: "members.read" },
   { to: "/account", label: "Account" },
 ];

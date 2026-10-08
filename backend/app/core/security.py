@@ -33,9 +33,7 @@ def pkce_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def set_cookie(
-    response: Response, name: str, value: str, *, max_age: int, http_only: bool = True
-) -> None:
+def set_cookie(response: Response, name: str, value: str, *, max_age: int, http_only: bool = True) -> None:
     response.set_cookie(
         name,
         value,

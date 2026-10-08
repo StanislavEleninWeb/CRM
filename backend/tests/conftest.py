@@ -54,17 +54,9 @@ def migrated_database() -> Iterator[None]:
         conn.execute(text("CREATE SCHEMA public AUTHORIZATION crm_migrator"))
         conn.execute(text("GRANT USAGE ON SCHEMA public TO crm_app"))
         conn.execute(
-            text(
-                "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
-                "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crm_app"
-            )
+            text("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crm_app")
         )
-        conn.execute(
-            text(
-                "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
-                "GRANT USAGE, SELECT ON SEQUENCES TO crm_app"
-            )
-        )
+        conn.execute(text("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO crm_app"))
     engine.dispose()
 
     config = Config(str(Path(__file__).parent.parent / "alembic.ini"))
