@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import { api, type Schemas, unwrap } from "../api/client";
 import { tenantKey, useAuth, useTenantQuery } from "../auth/AuthContext";
+import { EmailPanel } from "../components/EmailPanel";
 import { actionReason, TierBadge, VerificationBadges } from "../components/ProspectBits";
 import { ErrorState, Loading } from "../components/States";
 import { formatDate, formatDateTime, localInputToIso } from "../lib/format";
@@ -213,6 +214,8 @@ export function ProspectPage() {
       <ScoreSection prospect={p} />
       {can("crm.write") && p.status !== "disqualified" ? <OwnerAndConvert prospect={p} onDone={refresh} /> : null}
       {can("research.review") && p.status !== "disqualified" ? <DismissForm leadId={leadId} onDone={refresh} /> : null}
+
+      <EmailPanel leadId={leadId} />
 
       <section className="panel" aria-labelledby="calls-heading">
         <h2 id="calls-heading">Call history</h2>

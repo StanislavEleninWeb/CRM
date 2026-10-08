@@ -39,6 +39,20 @@ class Settings(BaseSettings):
     # The first entry encrypts new secrets; every entry can decrypt.
     secret_encryption_keys: str = ""
 
+    # Gmail for the internal pilot only. An "Internal" Google OAuth app serves one Workspace
+    # organisation; only the tenants listed here may connect a mailbox, and only from that domain.
+    gmail_client_id: str = ""
+    gmail_client_secret: str = ""
+    gmail_internal_domain: str = ""
+    gmail_internal_tenant_ids: str = ""
+    gmail_pubsub_topic: str = ""
+    gmail_push_audience: str = ""
+    gmail_push_service_account: str = ""
+    gmail_sync_query: str = "newer_than:30d"
+    mailbox_reconcile_minutes: int = Field(default=15, ge=1, le=1440)
+    # External tenants cannot connect Gmail until the verification and assessment gate passes (CRM-114).
+    external_gmail_enabled: bool = False
+
     s3_endpoint_url: str = ""
     s3_bucket: str = "crm-local"
     s3_access_key: str = ""
@@ -67,7 +81,13 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _no_placeholders_outside_development(self) -> "Settings":
         if self.environment in ("staging", "production"):
-            for name in ("session_secret", "database_url", "oidc_client_secret", "s3_secret_key"):
+            for name in (
+                "session_secret",
+                "database_url",
+                "oidc_client_secret",
+                "s3_secret_key",
+                "gmail_client_secret",
+            ):
                 if PLACEHOLDER_PREFIX in str(getattr(self, name)):
                     raise ValueError(f"{name} still contains a placeholder value")
             if self.oidc_dev_provider:
@@ -76,6 +96,10 @@ class Settings(BaseSettings):
                 if not str(getattr(self, name)).startswith("https://"):
                     raise ValueError(f"{name} must use https")
         return self
+
+    @property
+    def gmail_internal_tenants(self) -> frozenset[str]:
+        return frozenset(part.strip() for part in self.gmail_internal_tenant_ids.split(",") if part.strip())
 
     @property
     def cookies_secure(self) -> bool:

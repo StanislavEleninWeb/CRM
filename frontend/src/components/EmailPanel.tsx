@@ -1,0 +1,274 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { type FormEvent, useId, useState } from "react";
+
+import { api, type Schemas, unwrap } from "../api/client";
+import { tenantKey, useAuth, useTenantQuery } from "../auth/AuthContext";
+import { formatDateTime } from "../lib/format";
+import { EmptyState, ErrorState, Loading } from "./States";
+
+type Draft = Schemas["DraftOut"];
+type Thread = Schemas["ThreadOut"];
+type Reason = { level: string; code: string; message: string };
+
+const KIND_LABELS: Record<string, string> = {
+  unsolicited: "First contact (they have not asked for it)",
+  requested: "Details they asked for",
+  reply: "Reply",
+};
+const OUTCOME_LABELS: Record<string, string> = {
+  allow: "Meets the outreach rules",
+  review: "Needs a person to review",
+  block: "May not be sent",
+};
+
+/** Conversations and drafts for one prospect. Nothing here sends an email. */
+export function EmailPanel({ leadId }: { leadId: string }) {
+  const { tenantId, can, me } = useAuth();
+  const queryClient = useQueryClient();
+  const threadsKey = ["email-threads", leadId];
+  const draftsKey = ["email-drafts", leadId];
+  const threads = useTenantQuery(threadsKey, () =>
+    unwrap(api.GET("/api/v1/email-threads", { params: { query: { lead_id: leadId } } })),
+  );
+  const drafts = useTenantQuery(draftsKey, () =>
+    unwrap(api.GET("/api/v1/email-drafts", { params: { query: { lead_id: leadId } } })),
+  );
+  const refreshDrafts = () => queryClient.invalidateQueries({ queryKey: tenantKey(tenantId, draftsKey) });
+  const [kind, setKind] = useState<"unsolicited" | "requested">("unsolicited");
+  const kindId = useId();
+
+  const start = useMutation({
+    mutationFn: (body: Schemas["DraftIn"]) => unwrap(api.POST("/api/v1/email-drafts", { body })),
+    onSuccess: refreshDrafts,
+  });
+
+  return (
+    <section className="panel" aria-labelledby="email-heading">
+      <h2 id="email-heading">Email</h2>
+      {threads.isPending ? (
+        <Loading label="Loading conversations" />
+      ) : threads.isError ? (
+        <ErrorState error={threads.error} onRetry={() => void threads.refetch()} />
+      ) : threads.data.items.length === 0 ? (
+        <EmptyState title="No email conversation with this prospect yet." />
+      ) : (
+        <ul className="rows">
+          {threads.data.items.map((thread: Thread) => (
+            <li key={thread.id} className="row">
+              <div className="row-main">
+                <span className="row-title">{thread.subject ?? "(no subject)"}</span>
+                <ConversationMessages thread={thread} timeZone={me.active_tenant?.timezone} />
+              </div>
+              {can("outreach.draft") && thread.has_inbound ? (
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={start.isPending}
+                    onClick={() => start.mutate({ kind: "reply", thread_id: thread.id })}
+                  >
+                    Draft a reply<span className="visually-hidden"> to {thread.subject ?? "this conversation"}</span>
+                  </button>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {drafts.isError ? <ErrorState error={drafts.error} onRetry={() => void drafts.refetch()} /> : null}
+      {(drafts.data ?? []).map((draft: Draft) => (
+        <DraftEditor key={`${draft.id}-${draft.version}`} draft={draft} onChanged={refreshDrafts} />
+      ))}
+
+      {can("outreach.draft") ? (
+        <form
+          className="inline-form"
+          aria-label="Start an email draft"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            start.mutate({ kind, lead_id: leadId });
+          }}
+        >
+          <div className="field">
+            <label htmlFor={kindId}>Kind of email</label>
+            <select id={kindId} value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+              <option value="unsolicited">{KIND_LABELS.unsolicited}</option>
+              <option value="requested">{KIND_LABELS.requested}</option>
+            </select>
+          </div>
+          <button type="submit" className="button" disabled={start.isPending}>
+            Start a draft
+          </button>
+        </form>
+      ) : null}
+      {start.isError ? <ErrorState error={start.error} /> : null}
+    </section>
+  );
+}
+
+/** Message bodies are shown as plain text only; HTML from a mailbox is never rendered. */
+export function ConversationMessages({ thread, timeZone }: { thread: Thread; timeZone?: string }) {
+  return (
+    <ol className="messages">
+      {(thread.messages ?? []).map((message) => (
+        <li key={message.id}>
+          <span className="muted">
+            {message.direction === "outbound" ? "Sent" : "Received"} {formatDateTime(message.sent_at, timeZone)}
+            {message.direction === "inbound" && message.from_address ? ` · from ${message.from_address}` : ""}
+            {message.classification === "out_of_office" ? " · automatic reply" : ""}
+            {message.classification === "bounce" ? " · delivery failure" : ""}
+            {message.classification === "auto_generated" ? " · automated message" : ""}
+          </span>
+          <p className="message-body">{message.body_text ?? message.snippet ?? ""}</p>
+          {(message.attachments ?? []).length > 0 ? (
+            <p className="muted">
+              Attachments stay in the mailbox and are not downloaded here:{" "}
+              {(message.attachments as { filename?: string }[]).map((a) => a.filename ?? "unnamed").join(", ")}
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function DraftEditor({ draft, onChanged }: { draft: Draft; onChanged: () => Promise<void> }) {
+  const { can } = useAuth();
+  const [to, setTo] = useState(draft.to_address);
+  const [subject, setSubject] = useState(draft.subject);
+  const [body, setBody] = useState(draft.body_text);
+  const ids = { to: useId(), subject: useId(), body: useId() };
+  const editable = can("outreach.draft") && draft.status === "draft";
+  const dirty = to !== draft.to_address || subject !== draft.subject || body !== draft.body_text;
+  const reasons = draft.eligibility.reasons as Reason[];
+
+  const save = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.PATCH("/api/v1/email-drafts/{draft_id}", {
+          params: { path: { draft_id: draft.id } },
+          body: { to_address: to, subject, body_text: body },
+        }),
+      ),
+    onSuccess: onChanged,
+  });
+  const discard = useMutation({
+    mutationFn: () => unwrap(api.DELETE("/api/v1/email-drafts/{draft_id}", { params: { path: { draft_id: draft.id } } })),
+    onSuccess: onChanged,
+  });
+
+  return (
+    <article className="draft" aria-label={`Draft to ${draft.to_address}`}>
+      <h3>
+        Draft · {KIND_LABELS[draft.kind] ?? draft.kind} · version {draft.version}
+      </h3>
+      <form
+        className="stack"
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault();
+          save.mutate();
+        }}
+      >
+        <div className="field">
+          <label htmlFor={ids.to}>To</label>
+          <input id={ids.to} type="email" value={to} disabled={!editable} onChange={(e) => setTo(e.target.value)} required />
+        </div>
+        <div className="field">
+          <label htmlFor={ids.subject}>Subject</label>
+          <input id={ids.subject} value={subject} disabled={!editable} maxLength={300} onChange={(e) => setSubject(e.target.value)} required />
+        </div>
+        <div className="field">
+          <label htmlFor={ids.body}>Message</label>
+          <textarea id={ids.body} rows={8} value={body} disabled={!editable} onChange={(e) => setBody(e.target.value)} required />
+        </div>
+        {editable ? (
+          <div className="row-actions">
+            <button type="submit" className="button" disabled={!dirty || save.isPending}>
+              Save and re-check
+            </button>
+            <button
+              type="button"
+              className="button"
+              disabled={discard.isPending}
+              onClick={() => {
+                if (window.confirm("Discard this draft?")) discard.mutate();
+              }}
+            >
+              Discard
+            </button>
+          </div>
+        ) : null}
+      </form>
+      {save.isError ? <ErrorState error={save.error} /> : null}
+      {discard.isError ? <ErrorState error={discard.error} /> : null}
+
+      <div className={draft.eligibility.outcome === "allow" ? "notice" : "notice notice-warn"} role="status">
+        <strong>{OUTCOME_LABELS[draft.eligibility.outcome] ?? draft.eligibility.outcome}</strong>
+        {dirty ? <span> — save to check your changes</span> : null}
+        {reasons.length > 0 ? (
+          <ul>
+            {reasons.map((reason) => (
+              <li key={reason.code}>{reason.message}</li>
+            ))}
+          </ul>
+        ) : null}
+        {draft.eligibility.policy_version ? <p className="muted">Checked against rules {draft.eligibility.policy_version}</p> : null}
+      </div>
+      {reasons.some((reason) => reason.code === "recipient_unclassified") && can("research.review") ? (
+        <ClassifyRecipient address={draft.to_address} onDone={onChanged} />
+      ) : null}
+      <details>
+        <summary>Preview of what would be sent</summary>
+        <pre className="email-preview">{draft.eligibility.rendered_body}</pre>
+      </details>
+      <p className="muted">Sending from the application is not switched on yet. Drafts are saved for review.</p>
+    </article>
+  );
+}
+
+function ClassifyRecipient({ address, onDone }: { address: string; onDone: () => Promise<void> }) {
+  const [legalForm, setLegalForm] = useState<Schemas["ProfileIn"]["legal_form"]>("legal_person");
+  const [context, setContext] = useState<Schemas["ProfileIn"]["context"]>("business");
+  const [evidence, setEvidence] = useState("");
+  const ids = { form: useId(), context: useId(), evidence: useId() };
+  const record = useMutation({
+    mutationFn: () =>
+      unwrap(api.PUT("/api/v1/recipient-profiles", { body: { address, legal_form: legalForm, context, evidence } })),
+    onSuccess: onDone,
+  });
+  return (
+    <form
+      className="inline-form"
+      aria-label={`Record who ${address} belongs to`}
+      onSubmit={(event: FormEvent) => {
+        event.preventDefault();
+        record.mutate();
+      }}
+    >
+      <div className="field">
+        <label htmlFor={ids.form}>Recipient is</label>
+        <select id={ids.form} value={legalForm} onChange={(e) => setLegalForm(e.target.value as typeof legalForm)}>
+          <option value="legal_person">A company or other legal person</option>
+          <option value="sole_trader">A sole trader</option>
+          <option value="natural_person">A private individual</option>
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor={ids.context}>Address is used for</label>
+        <select id={ids.context} value={context} onChange={(e) => setContext(e.target.value as typeof context)}>
+          <option value="business">Business</option>
+          <option value="consumer">Private matters</option>
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor={ids.evidence}>What this is based on</label>
+        <input id={ids.evidence} value={evidence} onChange={(e) => setEvidence(e.target.value)} required minLength={5} maxLength={1000} />
+      </div>
+      <button type="submit" className="button" disabled={record.isPending}>
+        Record
+      </button>
+      {record.isError ? <ErrorState error={record.error} /> : null}
+    </form>
+  );
+}

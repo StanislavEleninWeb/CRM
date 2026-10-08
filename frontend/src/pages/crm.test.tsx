@@ -25,6 +25,17 @@ function page<T>(items: T[], total = items.length) {
   return { items, total, limit: 50, offset: 0 };
 }
 
+/** Pages that show email need these; an empty mailbox and no conversations by default. */
+const emailRoutes = {
+  "GET /api/v1/email-threads": () => json(page([])),
+  "GET /api/v1/email-drafts": () => json([]),
+};
+const mailboxRoutes = {
+  "GET /api/v1/mailboxes": () => json([]),
+  "GET /api/v1/mailboxes/gmail/availability": () =>
+    json({ available: false, reason: "Gmail is not configured on this installation.", internal_domain: null }),
+};
+
 function channel(overrides: Record<string, unknown>) {
   return {
     id: crypto.randomUUID(),
@@ -314,6 +325,7 @@ describe("prospect page", () => {
     const calls = mockApi({
       "GET /api/v1/auth/me": () =>
         json(makeMe({ active: { ...TENANT, permissions: [...PERMISSIONS, "calls.log", "research.review"] } })),
+      ...emailRoutes,
       "GET /api/v1/prospects/lead-1": () => json(detail()),
       "POST /api/v1/prospects/lead-1/calls": () => json(attempt, 201),
       "POST /api/v1/calls/call-1/outcome": () => json({ ...attempt, outcome: "follow_up_requested" }),
@@ -344,6 +356,7 @@ describe("prospect page", () => {
   it("lets a representative take the prospect and convert it to an opportunity", async () => {
     const calls = mockApi({
       "GET /api/v1/auth/me": me,
+      ...emailRoutes,
       "GET /api/v1/prospects/lead-1": () => json(detail()),
       "GET /api/v1/members": () =>
         json(
@@ -375,6 +388,7 @@ describe("prospect page", () => {
   it("offers no call button to a read-only member or for a dismissed prospect", async () => {
     mockApi({
       "GET /api/v1/auth/me": me,
+      ...emailRoutes,
       "GET /api/v1/prospects/lead-1": () =>
         json(
           detail({
@@ -400,6 +414,7 @@ describe("integrations page", () => {
     const calls = mockApi({
       "GET /api/v1/auth/me": () =>
         json(makeMe({ active: { ...TENANT, permissions: [...PERMISSIONS, "integrations.manage", "reports.read", "tenant.billing"] } })),
+      ...mailboxRoutes,
       "GET /api/v1/provider-adapters": () =>
         json([{ name: "fake_model", purpose: "model", label: "Local test model (not a real provider)", access_modes: ["byok"], is_local_test_adapter: true }]),
       "GET /api/v1/provider-connections": () =>

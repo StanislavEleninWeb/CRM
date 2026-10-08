@@ -693,6 +693,19 @@ def _apply_outcome(ctx: TenantContext, attempt: RowMapping, body: CallOutcome) -
                 "today": today_in(_settings(ctx)["timezone"]),
             },
         )
+    if email:
+        # Recorded as a request for this follow-up, with its scope. It is not consent to marketing.
+        execute(
+            ctx,
+            "INSERT INTO email_consents (tenant_id, address, scope, kind, source, evidence, obtained_at, recorded_by) "
+            "VALUES (:tenant_id, :a, :scope, 'requested_follow_up', 'phone call', :e, now(), :u)",
+            {
+                "a": email,
+                "scope": body.follow_up_scope or body.follow_up_note or "A follow-up they asked for by phone",
+                "e": f"Call attempt {attempt['id']}",
+                "u": ctx.user_id,
+            },
+        )
     updated = one(
         ctx,
         "UPDATE call_attempts SET outcome = :o, outcome_reported_at = now(), notes = :notes, follow_up_task_id = :task, "

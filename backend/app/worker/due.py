@@ -42,6 +42,10 @@ def _load_builtin_handlers() -> None:
 
     _handlers.setdefault("research.run", orchestrator.run_handler)
     _handlers.setdefault("research.schedule", orchestrator.schedule_handler)
+    from app.modules.email import sync
+
+    _handlers.setdefault("mailbox.sync", sync.sync_handler)
+    _handlers.setdefault("mailbox.watch", sync.watch_handler)
     _builtin_loaded = True
 
 

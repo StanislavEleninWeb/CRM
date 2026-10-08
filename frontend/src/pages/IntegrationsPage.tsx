@@ -13,6 +13,7 @@ export function IntegrationsPage() {
   return (
     <>
       <h1>Integrations and spend</h1>
+      <Mailboxes />
       {can("integrations.manage") ? <Connections /> : null}
       <Budgets />
       <Usage />
@@ -241,6 +242,90 @@ function Usage() {
           </div>
         </dl>
       )}
+    </section>
+  );
+}
+
+function Mailboxes() {
+  const { tenantId, can, me } = useAuth();
+  const queryClient = useQueryClient();
+  const key = ["mailboxes"];
+  const mailboxes = useTenantQuery(key, () => unwrap(api.GET("/api/v1/mailboxes")));
+  const availability = useTenantQuery(["gmail-availability"], () => unwrap(api.GET("/api/v1/mailboxes/gmail/availability")));
+  const refresh = () => queryClient.invalidateQueries({ queryKey: tenantKey(tenantId, key) });
+  const act = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "sync" | "disconnect" }) =>
+      action === "sync"
+        ? unwrap(api.POST("/api/v1/mailboxes/{mailbox_id}/sync", { params: { path: { mailbox_id: id } } }))
+        : unwrap(api.DELETE("/api/v1/mailboxes/{mailbox_id}", { params: { path: { mailbox_id: id } } })),
+    onSettled: refresh,
+  });
+  const manage = can("integrations.manage");
+
+  return (
+    <section className="panel" aria-labelledby="mailbox-heading">
+      <h2 id="mailbox-heading">Mailbox</h2>
+      {mailboxes.isPending ? (
+        <Loading label="Loading mailboxes" />
+      ) : mailboxes.isError ? (
+        <ErrorState error={mailboxes.error} onRetry={() => void mailboxes.refetch()} />
+      ) : mailboxes.data.length === 0 ? (
+        <EmptyState title="No mailbox connected." />
+      ) : (
+        <ul className="rows">
+          {mailboxes.data.map((mailbox) => (
+            <li key={mailbox.id} className="row">
+              <div className="row-main">
+                <span className="row-title">{mailbox.email_address}</span>
+                <span className="muted">
+                  Gmail · {mailbox.mode === "internal" ? "your own organisation" : mailbox.mode} · replies{" "}
+                  {mailbox.can_read_replies ? "are read" : "cannot be read"} · last checked{" "}
+                  {formatDateTime(mailbox.last_synced_at, me.active_tenant?.timezone)}
+                </span>
+                {mailbox.verification !== "verified_live" ? (
+                  <span className="muted">Not yet confirmed against a real mailbox.</span>
+                ) : null}
+                {mailbox.problems.map((problem) => (
+                  <span key={problem} className="badge badge-warn">
+                    {problem}
+                  </span>
+                ))}
+              </div>
+              <span className={mailbox.healthy ? "badge tier-A" : "badge badge-warn"}>{mailbox.status}</span>
+              {manage && mailbox.status !== "revoked" ? (
+                <div className="row-actions">
+                  <button type="button" className="button" disabled={act.isPending} onClick={() => act.mutate({ id: mailbox.id, action: "sync" })}>
+                    Check now<span className="visually-hidden"> {mailbox.email_address}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={act.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Disconnect ${mailbox.email_address}? Conversations already stored are kept.`))
+                        act.mutate({ id: mailbox.id, action: "disconnect" });
+                    }}
+                  >
+                    Disconnect<span className="visually-hidden"> {mailbox.email_address}</span>
+                  </button>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {act.isError ? <ErrorState error={act.error} /> : null}
+      {availability.data && !availability.data.available ? (
+        <p className="notice notice-warn">Gmail cannot be connected here: {availability.data.reason}</p>
+      ) : null}
+      {manage && availability.data?.available ? (
+        <p>
+          {/* A full-page navigation: the browser is sent to Google and back. */}
+          <a className="button" href="/api/v1/mailboxes/gmail/connect">
+            Connect a {availability.data.internal_domain} Gmail mailbox
+          </a>
+        </p>
+      ) : null}
     </section>
   );
 }

@@ -11,6 +11,7 @@ import { AccountPage } from "./pages/AccountPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
 import { CompanyPage } from "./pages/CompanyPage";
 import { DealsPage } from "./pages/DealsPage";
+import { EmailPage } from "./pages/EmailPage";
 import { ImportPage } from "./pages/ImportPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -74,6 +75,7 @@ export function AppRoutes() {
               ["tasks", <TasksPage key="tasks" />],
               ["import", <ImportPage key="import" />],
               ["integrations", <IntegrationsPage key="integrations" />],
+              ["email", <EmailPage key="email" />],
               ["research", <ResearchPage key="research" />],
               ["prospects", <ProspectsPage key="prospects" />],
               ["verification", <ProspectsPage key="verification" verificationOnly />],
