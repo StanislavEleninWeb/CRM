@@ -177,3 +177,52 @@ describe("opportunities board", () => {
     });
   });
 });
+
+describe("import page", () => {
+  it("shows the review and imports only after confirmation", async () => {
+    const ready = {
+      id: "imp-1",
+      kind: "xlsx",
+      filename: "prospects.xlsx",
+      size_bytes: 1000,
+      status: "ready",
+      mapping: {},
+      result: {},
+      error: null,
+      created_at: "2026-10-08T10:00:00Z",
+      committed_at: null,
+      report: {
+        counts: { rows: 94, create: 94, with_errors: 0, with_warnings: 0 },
+        tiers: { A: 21, B: 62, C: 11 },
+        confidence: { high: 31, medium: 58, low: 5 },
+        missing_not_found: { email: 58 },
+        mapping: { lead_id: "Lead ID" },
+        unmapped_headers: [],
+        score_mismatches: 0,
+        shortlist: { sheet: "Shortlist", rows: 25, unresolved_lead_ids: [] },
+      },
+    };
+    let committed = false;
+    const calls = mockApi({
+      "GET /api/v1/auth/me": () =>
+        json(makeMe({ active: { ...TENANT, permissions: [...PERMISSIONS, "import.run"] } })),
+      "POST /api/v1/imports": () => json(ready, 202),
+      "GET /api/v1/imports/imp-1": () =>
+        json(committed ? { ...ready, status: "committed", result: { created: 94 } } : ready),
+      "POST /api/v1/imports/imp-1/commit": () => {
+        committed = true;
+        return json({ ...ready, status: "committed", result: { created: 94 } }, 202);
+      },
+    });
+    renderAt("/import");
+    const input = await screen.findByLabelText(/Prospect list/);
+    await userEvent.upload(input, new File(["x"], "prospects.xlsx"));
+    await userEvent.click(screen.getByRole("button", { name: "Check file" }));
+    expect(await screen.findByText("A: 21, B: 62, C: 11")).toBeInTheDocument();
+    expect(screen.getByText(/It adds\s+no leads of its own/)).toBeInTheDocument();
+    expect(calls.some((call) => call.path.endsWith("/commit"))).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Import 94 leads" }));
+    expect(await screen.findByText(/Import complete/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("94 added");
+  });
+});

@@ -72,7 +72,7 @@ def update_tenant(body: TenantUpdate, ctx: TenantContext = tenant_with(Permissio
     if changes:
         assignments = ", ".join(f"{column} = :{column}" for column in changes)  # fixed field names
         ctx.db.execute(
-            text(f"UPDATE tenants SET {assignments} WHERE id = :id"),  # noqa: S608
+            text(f"UPDATE tenants SET {assignments} WHERE id = :id"),
             {**changes, "id": ctx.tenant_id},
         )
         record_audit(
@@ -209,7 +209,7 @@ def list_invitations(
             SELECT id, email, role, {_INVITATION_STATUS} AS status, expires_at, created_at
             FROM invitations WHERE tenant_id = :t
             ORDER BY created_at DESC, id LIMIT :limit OFFSET :offset
-            """  # noqa: S608
+            """
         ),
         {"t": ctx.tenant_id, "limit": paging.limit, "offset": paging.offset},
     ).mappings()

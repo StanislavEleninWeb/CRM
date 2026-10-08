@@ -110,3 +110,51 @@ What is covered:
 - Uploaded files are checked by declared content type and size only; there is no malware scanning.
 - Storage was verified against SeaweedFS locally; no cloud S3 provider has been exercised.
 - The lead list and lead actions exist in the API; their screens come with the prospect workspace in phase 05.
+
+## Phase 04 — 8 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` with the private reference workbook present | 144 passed, 0 skipped |
+| `pytest` with the fixture directory absent | Reference tests reported as `SKIPPED: reference fixture absent` (5), the rest passed |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 15 tests passed |
+| Real stack, real worker (`infra/e2e/client.py`): upload, parse, commit, re-import, export of the reference workbook | Parsed in about 1 s and committed in about 1 s by the Celery worker: 94 created; re-import 94 unchanged with the same shortlist; export returned a workbook |
+
+### Reference workbook gate (the phase 04 acceptance assertions)
+
+All verified by `tests/test_import.py` against the actual file, through the upload API, as the runtime database role:
+
+| Assertion | Result |
+|---|---|
+| Leads created | 94 (not 119); 94 distinct Lead IDs; 94 companies |
+| Shortlist | 25 entries, all linked to existing leads, creates no leads; 21 A + 4 B fillers; minimum score 77; equals the top 25 by score; dated 2026-10-08 |
+| Tiers | 21 A / 62 B / 11 C, computed on the server |
+| Component totals | All match the source totals; no component above its cap; scores 59, 60, 79, 80 fall in C, B, B, A |
+| Confidence | 31 high / 58 medium / 5 low |
+| Columns | 35 mapped, none unmapped; every lead keeps a 35-key raw row |
+| Phone cells with a semicolon | 17; one `delivery` and one `emergency` number typed as such; the emergency number is not usable for sales calls; 93 companies have a phone; every number normalised to international form (country known) |
+| Website status | 14 raw values kept; none left unclassified; 30 "no own website" |
+| Recommended channel | 4 raw values; 66 phone-first (one with the instruction "ask for the manager"), 28 email-first (one with a phone fallback) |
+| Missing markers | 176 literal `Not found`: website 30, phone 1, email 58, contact page 46, other channel 41; none stored as a contact value |
+| Listing identifiers | 79 `place_id`, 15 `cid` (numeric, not reinterpreted) |
+| Emails | 36; 19 on free-mail domains (10 abv.bg, 8 gmail.com, 1 mail.bg); no legal classification inferred |
+| Neither website nor email | 30 leads |
+| Tags | 10 distinct, including `Other` on 2 leads |
+| Date checked | Stored as `DATE` 2026-10-07; identical when read in UTC, Europe/Sofia, America/Los_Angeles and Pacific/Kiritimati sessions, and in the export |
+| Provenance | Every assessment is `user_import` / `unverified` |
+| Re-import | 94 updates, 0 creates; no new assessments, scores, observations or shortlists |
+| Round trip | Export matches the source cell for cell on 32 of 35 columns (dates compared as dates; the phone and other-channel columns are compared structurally); importing the export into a second tenant yields identical structured data for all 94 leads |
+| Export summary | Calculated from exported rows: 94 total, 21/62/11, 93 with phone, 36 with email, 64 with a website, 25 on the shortlist of which 4 below Tier A |
+
+### Synthetic cases (always run, including in CI)
+
+Preview changes nothing until commit; a row becomes structured records with raw values kept; re-import adds a new research snapshot while keeping the old one, and preserves a do-not-contact flag, outreach status, edited company fields and a reviewer's score override; duplicate Lead IDs, over-cap and partial scores, and a missing name are errors and are skipped; a wrong source total is a warning and the computed total wins; an unscored row imports unscored; text beginning with `=`, `+`, `-` or `@` is imported and exported as text with no formula in the output XML; formulas are never evaluated and cells without a cached result are counted; `.xlsm`, `.xls`, empty, oversized, non-zip and macro-carrying files are refused; CSV with Cyrillic and a possible-duplicate review; column mapping can be corrected; import and export need permission and stay inside the tenant; a duplicate task delivery does not apply an import twice; score overrides are computed on the server and keep history.
+
+**Limitations:**
+
+- The reference gate is verified only where the private workbook is present. Public CI reports those five tests as skipped.
+- Re-import fills blank company fields and adds new channels; it does not overwrite company fields a user may have edited. A deliberate "overwrite from file" option does not exist.
+- Rows without a Lead ID are matched only by exact name and city; fuzzy matching is left to the duplicate review on the company page.
+- The export's shortlist sheet is the current top 25 by score. The call-first daily queue arrives in phase 05.
+- A defect found and fixed while running the real stack: the worker and scheduler were built as separate images and had gone stale. They now share one image with the API.

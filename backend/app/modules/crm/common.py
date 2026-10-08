@@ -50,7 +50,7 @@ def exists(ctx: TenantContext, table: str, row_id: UUID | None, label: str) -> N
         return
     found = scalar(
         ctx,
-        f"SELECT 1 FROM {table} WHERE tenant_id = :tenant_id AND id = :id",  # noqa: S608
+        f"SELECT 1 FROM {table} WHERE tenant_id = :tenant_id AND id = :id",
         {"id": row_id},
     )
     if not found:

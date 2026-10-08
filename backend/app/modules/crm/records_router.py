@@ -109,10 +109,10 @@ def list_notes(
     deal_id: UUID | None = None,
 ) -> Page[NoteOut]:
     clause, params = _link_filter({"company_id": company_id, "lead_id": lead_id, "deal_id": deal_id}, "n")
-    total = scalar(ctx, f"SELECT count(*) FROM notes n WHERE n.tenant_id = :tenant_id AND {clause}", params)  # noqa: S608
+    total = scalar(ctx, f"SELECT count(*) FROM notes n WHERE n.tenant_id = :tenant_id AND {clause}", params)
     rows = many(
         ctx,
-        f"SELECT n.* FROM notes n WHERE n.tenant_id = :tenant_id AND {clause} "  # noqa: S608
+        f"SELECT n.* FROM notes n WHERE n.tenant_id = :tenant_id AND {clause} "
         "ORDER BY n.created_at DESC, n.id LIMIT :limit OFFSET :offset",
         {**params, "limit": paging.limit, "offset": paging.offset},
     )
@@ -180,10 +180,10 @@ def list_activities(
     if kind:
         clause += " AND a.kind = :kind"
         params["kind"] = kind
-    total = scalar(ctx, f"SELECT count(*) FROM activities a WHERE a.tenant_id = :tenant_id AND {clause}", params)  # noqa: S608
+    total = scalar(ctx, f"SELECT count(*) FROM activities a WHERE a.tenant_id = :tenant_id AND {clause}", params)
     rows = many(
         ctx,
-        f"SELECT a.* FROM activities a WHERE a.tenant_id = :tenant_id AND {clause} "  # noqa: S608
+        f"SELECT a.* FROM activities a WHERE a.tenant_id = :tenant_id AND {clause} "
         "ORDER BY a.occurred_at DESC, a.id DESC LIMIT :limit OFFSET :offset",
         {**params, "limit": paging.limit, "offset": paging.offset},
     )
@@ -252,7 +252,7 @@ def list_attachments(
     clause, params = _link_filter({"company_id": company_id, "lead_id": lead_id, "deal_id": deal_id}, "f")
     rows = many(
         ctx,
-        f"SELECT f.* FROM attachments f WHERE f.tenant_id = :tenant_id AND f.deleted_at IS NULL AND {clause} "  # noqa: S608
+        f"SELECT f.* FROM attachments f WHERE f.tenant_id = :tenant_id AND f.deleted_at IS NULL AND {clause} "
         "ORDER BY f.created_at DESC LIMIT 200",
         params,
     )

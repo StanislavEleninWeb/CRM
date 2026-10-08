@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core` (local commits only; not pushed) |
-| Last completed phase | 03 |
-| Next action | Phase 04: CRM-040 research schema, then the deterministic rubric and the XLSX importer |
+| Last completed phase | 04 |
+| Next action | Phase 05: CRM-050 prospect workspace, then the verification queue, daily shortlist and call outcomes |
 
 ## Phases
 
@@ -19,7 +19,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 01 Executable foundation | DONE | see `git log` (`Phase 01`) | Tenant isolation and identity are not part of this phase |
 | 02 Identity, tenancy, roles, isolation | DONE | see `git log` (`Phase 02`) | Production identity provider and MFA verification remain BLOCKED (U-01) |
 | 03 Core CRM and history | DONE | see `git log` (`Phase 03`) | Lead list and lead-detail screens arrive with the prospect workspace in phase 05 |
-| 04 Research schema, scoring, import/export | TODO | — | |
+| 04 Research schema, scoring, import/export | DONE | see `git log` (`Phase 04`) | Reference-workbook gate passed locally; those tests are skipped in public CI |
 | 05 Prospect review, shortlist, calls | TODO | — | |
 | 06 Provider connections and usage | TODO | — | |
 | 07 AI research | TODO | — | |
@@ -75,3 +75,5 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - Frontend data that belongs to a workspace uses `useTenantQuery`, which puts the workspace ID in the cache key.
 - Identity tables use `ENABLE ROW LEVEL SECURITY`; tenant-owned business tables use `FORCE`. Pre-tenant operations go through narrow `SECURITY DEFINER` functions.
 - If a migration that was already applied locally is edited, run `make reset` before `make up`.
+- API, worker, scheduler and the migration job share one image (`seweb-crm-backend:dev`). Tests run Celery tasks inline; the real worker path is checked with scripts in `infra/e2e/` against a running stack.
+- After a real import the local development database holds real prospect data. It lives only in the local Docker volume; `make reset` removes it.

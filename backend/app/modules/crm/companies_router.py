@@ -68,7 +68,7 @@ CHANNEL_COLUMNS = """
 def _company(ctx: TenantContext, company_id: UUID, *, lock: bool = False) -> RowMapping:
     return one(
         ctx,
-        f"SELECT * FROM companies WHERE tenant_id = :tenant_id AND id = :id {'FOR UPDATE' if lock else ''}",  # noqa: S608
+        f"SELECT * FROM companies WHERE tenant_id = :tenant_id AND id = :id {'FOR UPDATE' if lock else ''}",
         {"id": company_id},
         "Company not found.",
     )
@@ -142,11 +142,11 @@ def list_companies(
         )
         params["tag"] = tag
     condition = " AND ".join(where)
-    total = scalar(ctx, f"SELECT count(*) FROM companies c WHERE {condition}", params)  # noqa: S608
+    total = scalar(ctx, f"SELECT count(*) FROM companies c WHERE {condition}", params)
     ordering = order_by(sort, COMPANY_SORTS, "lower(c.name) ASC, c.id")
     items = many(
         ctx,
-        f"SELECT c.* FROM companies c WHERE {condition} ORDER BY {ordering} LIMIT :limit OFFSET :offset",  # noqa: S608
+        f"SELECT c.* FROM companies c WHERE {condition} ORDER BY {ordering} LIMIT :limit OFFSET :offset",
         {**params, "limit": paging.limit, "offset": paging.offset},
     )
     return Page(items=[CompanyOut(**row) for row in items], total=total, limit=paging.limit, offset=paging.offset)
@@ -189,7 +189,7 @@ def get_company(company_id: UUID, ctx: TenantContext = READ) -> CompanyDetail:
     scope = {"c": company_id}
     channels = many(
         ctx,
-        f"SELECT {CHANNEL_COLUMNS} FROM contact_channels WHERE tenant_id = :tenant_id "  # noqa: S608
+        f"SELECT {CHANNEL_COLUMNS} FROM contact_channels WHERE tenant_id = :tenant_id "
         "AND company_id = :c ORDER BY kind, position, created_at",
         scope,
     )
@@ -257,7 +257,7 @@ def update_company(company_id: UUID, body: CompanyUpdate, ctx: TenantContext = W
     try:
         row = one(
             ctx,
-            f"UPDATE companies SET {', '.join(assignments)} WHERE tenant_id = :tenant_id AND id = :id RETURNING *",  # noqa: S608
+            f"UPDATE companies SET {', '.join(assignments)} WHERE tenant_id = :tenant_id AND id = :id RETURNING *",
             {**changes, "id": company_id},
             "Company not found.",
         )
@@ -315,7 +315,7 @@ def bulk_companies(body: BulkCompanies, ctx: TenantContext = tenant_with(Permiss
         value = "COALESCE(archived_at, now())" if body.action == "archive" else "NULL"
         changed = execute(
             ctx,
-            f"UPDATE companies SET archived_at = {value} WHERE tenant_id = :tenant_id AND id = ANY(:ids)",  # noqa: S608
+            f"UPDATE companies SET archived_at = {value} WHERE tenant_id = :tenant_id AND id = ANY(:ids)",
             targets,
         )
     else:
@@ -425,7 +425,7 @@ def create_channel(company_id: UUID, body: ChannelIn, ctx: TenantContext = WRITE
                 (SELECT COALESCE(max(position), 0) + 1 FROM contact_channels
                  WHERE tenant_id = :tenant_id AND company_id = :c))
         RETURNING {CHANNEL_COLUMNS}
-        """,  # noqa: S608
+        """,
         {"c": company_id, "normalized": normalized, "is_e164": is_e164, **body.model_dump()},
         "Channel not found.",
     )
@@ -474,7 +474,7 @@ def update_channel(channel_id: UUID, body: ChannelUpdate, ctx: TenantContext = W
         return channel_out(current, active_restricted_kinds(ctx, current["company_id"]))
     row = one(
         ctx,
-        f"UPDATE contact_channels SET {set_clause(changes)}{extra} "  # noqa: S608
+        f"UPDATE contact_channels SET {set_clause(changes)}{extra} "
         f"WHERE tenant_id = :tenant_id AND id = :id RETURNING {CHANNEL_COLUMNS}",
         {**changes, "id": channel_id, "actor": ctx.user_id},
         "Channel not found.",
@@ -648,7 +648,7 @@ def merge_companies(
     for table in MOVABLE:
         moved[table] = execute(
             ctx,
-            f"UPDATE {table} SET company_id = :target WHERE tenant_id = :t AND company_id = :source",  # noqa: S608
+            f"UPDATE {table} SET company_id = :target WHERE tenant_id = :t AND company_id = :source",
             scope,
         )
     # A channel that exists on both keeps the stricter state: a restriction always survives.

@@ -12,6 +12,7 @@ from app.modules.crm.records_router import router as records_router
 from app.modules.crm.sales_router import router as sales_router
 from app.modules.identity.auth_router import router as auth_router
 from app.modules.identity.tenant_router import router as tenant_router
+from app.modules.research.router import router as research_router
 from app.modules.system.router import api_router as system_api_router
 from app.modules.system.router import router as health_router
 
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     v1.include_router(companies_router)
     v1.include_router(sales_router)
     v1.include_router(records_router)
+    v1.include_router(research_router)
     app.include_router(v1)
     return app
 

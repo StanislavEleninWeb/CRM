@@ -41,10 +41,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-040 | Research schema: assessments, observations, evidence, hypotheses, recommendations, tags | Provenance and raw values retained | TODO |
-| CRM-041 | Deterministic rubric | Server-computed totals and tiers; overrides with reasons; versioned history | TODO |
-| CRM-042 | CSV/XLSX importer | All fixture assertions in `approved-scope.md`; re-import creates no duplicates | TODO |
-| CRM-043 | Reference export | Round trip preserves IDs and fields; formula injection neutralised | TODO |
+| CRM-040 | Research schema: assessments, observations, evidence, hypotheses, recommendations, tags | Provenance and raw values retained | DONE |
+| CRM-041 | Deterministic rubric | Server-computed totals and tiers; overrides with reasons; versioned history | DONE |
+| CRM-042 | CSV/XLSX importer | All fixture assertions in `approved-scope.md`; re-import creates no duplicates | DONE |
+| CRM-043 | Reference export | Round trip preserves IDs and fields; formula injection neutralised | DONE |
 
 ## Phase 05 — prospect review, shortlist, calls (P1, depends on 04)
 

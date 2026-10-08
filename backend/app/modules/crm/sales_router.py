@@ -103,7 +103,7 @@ def list_leads(
     condition = " AND ".join(where)
     total = scalar(
         ctx,
-        f"SELECT count(*) FROM leads l JOIN companies c ON c.tenant_id = l.tenant_id AND c.id = l.company_id WHERE {condition}",  # noqa: S608
+        f"SELECT count(*) FROM leads l JOIN companies c ON c.tenant_id = l.tenant_id AND c.id = l.company_id WHERE {condition}",
         params_typed,
     )
     ordering = order_by(
@@ -173,7 +173,7 @@ def update_lead(lead_id: UUID, body: LeadUpdate, ctx: TenantContext = WRITE) -> 
         assignments.append(set_clause(plain))
     if assignments:
         ctx.db.execute(
-            text(f"UPDATE leads SET {', '.join(assignments)} WHERE tenant_id = :t AND id = :id"),  # noqa: S608
+            text(f"UPDATE leads SET {', '.join(assignments)} WHERE tenant_id = :t AND id = :id"),
             {**changes, "t": ctx.tenant_id, "id": lead_id},
         )
         if "status" in changes and changes["status"] != current["status"]:
@@ -303,7 +303,7 @@ def update_stage(stage_id: UUID, body: StageUpdate, ctx: TenantContext = MANAGE)
     try:
         row = one(
             ctx,
-            f"UPDATE pipeline_stages SET {set_clause(changes)} WHERE tenant_id = :tenant_id AND id = :id "  # noqa: S608
+            f"UPDATE pipeline_stages SET {set_clause(changes)} WHERE tenant_id = :tenant_id AND id = :id "
             "RETURNING id, pipeline_id, name, position, kind",
             {**changes, "id": stage_id},
             "Stage not found.",
@@ -451,7 +451,7 @@ def list_deals(
     condition = " AND ".join(where)
     total = scalar(
         ctx,
-        f"SELECT count(*) FROM deals d JOIN pipeline_stages s ON s.tenant_id = d.tenant_id AND s.id = d.stage_id WHERE {condition}",  # noqa: S608
+        f"SELECT count(*) FROM deals d JOIN pipeline_stages s ON s.tenant_id = d.tenant_id AND s.id = d.stage_id WHERE {condition}",
         typed,
     )
     ordering = order_by(
@@ -531,7 +531,7 @@ def update_deal(deal_id: UUID, body: DealUpdate, ctx: TenantContext = WRITE) -> 
     if not assignments:
         return DealOut(**current)
     ctx.db.execute(
-        text(f"UPDATE deals SET {', '.join(assignments)} WHERE tenant_id = :t AND id = :id"),  # noqa: S608
+        text(f"UPDATE deals SET {', '.join(assignments)} WHERE tenant_id = :t AND id = :id"),
         {**changes, "t": ctx.tenant_id, "id": deal_id},
     )
     if new_stage is not None:
@@ -614,7 +614,7 @@ def list_tasks(
         where.append("t.due_at <= :due_before")
         params["due_before"] = due_before
     condition = " AND ".join(where)
-    total = scalar(ctx, f"SELECT count(*) FROM tasks t WHERE {condition}", params)  # noqa: S608
+    total = scalar(ctx, f"SELECT count(*) FROM tasks t WHERE {condition}", params)
     items = many(
         ctx,
         f"{TASK_SELECT} WHERE {condition} ORDER BY t.due_at ASC NULLS LAST, t.created_at, t.id LIMIT :limit OFFSET :offset",
@@ -676,7 +676,7 @@ def update_task(task_id: UUID, body: TaskUpdate, ctx: TenantContext = WRITE) -> 
             )
     if changes:
         ctx.db.execute(
-            text(f"UPDATE tasks SET {set_clause(changes)}{extra} WHERE tenant_id = :t AND id = :id"),  # noqa: S608
+            text(f"UPDATE tasks SET {set_clause(changes)}{extra} WHERE tenant_id = :t AND id = :id"),
             {**changes, "t": ctx.tenant_id, "id": task_id},
         )
     return TaskOut(**_task(ctx, task_id))

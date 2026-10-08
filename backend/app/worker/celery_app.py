@@ -34,7 +34,10 @@ celery_app.conf.update(
             "options": {"expires": float(settings.due_poll_interval_seconds)},
         },
     },
-    imports=("app.worker.tasks",),
+    imports=("app.worker.tasks", "app.modules.research.tasks"),
+    # Tests run tasks inline; the worker path is exercised by the smoke test.
+    task_always_eager=settings.environment == "test",
+    task_eager_propagates=True,
 )
 
 

@@ -2,6 +2,8 @@
 name: seweb-crm
 
 x-backend: &backend
+  # One image for the API, worker, scheduler and migration job, so they can never drift apart.
+  image: seweb-crm-backend:dev
   build:
     context: ./backend
     target: dev
@@ -9,6 +11,7 @@ x-backend: &backend
   volumes:
     - ./backend:/app
     - ./tests/fixtures:/fixtures:ro
+    - ./infra:/infra:ro
   depends_on:
     db: {condition: service_healthy}
     redis: {condition: service_healthy}

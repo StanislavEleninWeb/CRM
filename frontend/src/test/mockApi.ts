@@ -31,7 +31,7 @@ export function mockApi(routes: Record<string, Handler>) {
       method: request.method,
       path: url.pathname,
       headers: request.headers,
-      body: text ? JSON.parse(text) : undefined,
+      body: parseBody(text),
     };
     calls.push(call);
     const handler = routes[`${call.method} ${call.path}`];
@@ -39,6 +39,15 @@ export function mockApi(routes: Record<string, Handler>) {
     return handler(call);
   });
   return calls;
+}
+
+function parseBody(text: string): unknown {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text; // multipart uploads are not JSON
+  }
 }
 
 export function deferred<T>() {

@@ -11,6 +11,7 @@ import { AccountPage } from "./pages/AccountPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
 import { CompanyPage } from "./pages/CompanyPage";
 import { DealsPage } from "./pages/DealsPage";
+import { ImportPage } from "./pages/ImportPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewWorkspacePage } from "./pages/NewWorkspacePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -67,6 +68,7 @@ export function AppRoutes() {
               ["companies/:companyId", <CompanyPage key="company" />],
               ["opportunities", <DealsPage key="deals" />],
               ["tasks", <TasksPage key="tasks" />],
+              ["import", <ImportPage key="import" />],
             ] as const
           ).map(([path, element]) => (
             <Route key={path} path={path} element={<RequireWorkspace>{element}</RequireWorkspace>} />
