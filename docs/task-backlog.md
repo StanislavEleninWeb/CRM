@@ -14,10 +14,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-010 | Scaffold: FastAPI app, session layer, Alembic, error envelope, correlation IDs, pagination, settings validation, log redaction | Clean checkout starts with documented commands | TODO |
-| CRM-011 | Local containers: API, worker, scheduler, frontend, PostgreSQL, Redis, object storage | Readiness reflects database availability; worker runs a synthetic job | TODO |
-| CRM-012 | Migrations and CI | Migrations apply from empty; CI commands run locally | TODO |
-| CRM-013 | Frontend shell | Responsive shell calls the real API; loading, empty and error states | TODO |
+| CRM-010 | Scaffold: FastAPI app, session layer, Alembic, error envelope, correlation IDs, pagination, settings validation, log redaction | Clean checkout starts with documented commands | DONE |
+| CRM-011 | Local containers: API, worker, scheduler, frontend, PostgreSQL, Redis, object storage | Readiness reflects database availability; worker runs a synthetic job | DONE |
+| CRM-012 | Migrations and CI | Migrations apply from empty; CI commands run locally | DONE |
+| CRM-013 | Frontend shell | Responsive shell calls the real API; loading, empty and error states | DONE |
 
 ## Phase 02 — identity, tenancy, roles, isolation (P0, depends on 01)
 

@@ -23,3 +23,22 @@ No application tests exist yet. The following checks were run against the refere
 | Macros or external links | None |
 
 **Limitation:** this confirms the fixture matches the build pack's assertions. It is not evidence that the application imports it correctly; that is the phase 04 gate.
+
+## Phase 01 — 8 October 2026
+
+All commands ran in containers on the local machine.
+
+| Command | Result |
+|---|---|
+| `make up` (clean volumes) | All services healthy; migration `0001` applied from an empty database |
+| `pytest` (backend, PostgreSQL 17, role `crm_app`) | 15 passed |
+| `ruff check`, `ruff format --check`, `mypy app` | Clean |
+| `alembic downgrade base && alembic upgrade head && alembic check` | Clean; no pending model changes |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 3 tests passed |
+| `./infra/smoke.sh` | Readiness `ready`; frontend proxied `/api/v1/system/info` from the real API; worker returned the synthetic job result; scheduler recorded a due-row poll |
+| Production image builds (`backend`, `frontend`) | Built; API image runs as uid 10001 |
+| OpenAPI document vs generated | Identical |
+
+What the tests cover: readiness succeeds with database and Redis and returns 503 when the database is unreachable; the runtime role is not a superuser, cannot bypass row-level security and cannot create tables; an unset tenant resolves to `NULL`; the error envelope and correlation IDs; log redaction; settings validation; tenant-local dates; the beat schedule contains only the short polling task.
+
+**Limitations:** the GitHub Actions workflow has not run on GitHub (nothing is pushed); its steps were run locally by hand. No tenant-owned tables exist yet, so isolation is not demonstrated until phase 02.

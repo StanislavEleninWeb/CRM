@@ -8,15 +8,15 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/phase-00` (local commits only; not pushed) |
-| Last completed phase | 00 |
-| Next action | Phase 01: CRM-010 scaffold the FastAPI app, session layer and Alembic |
+| Last completed phase | 01 |
+| Next action | Phase 02: CRM-020 identity and sessions, then tenants, roles and row-level security |
 
 ## Phases
 
 | Phase | Status | Commit | Notes |
 |---|---|---|---|
 | 00 Scope, repository, decisions | DONE | see `git log` (`Phase 00`) | Docs only; no application code |
-| 01 Executable foundation | TODO | — | |
+| 01 Executable foundation | DONE | see `git log` (`Phase 01`) | Tenant isolation and identity are not part of this phase |
 | 02 Identity, tenancy, roles, isolation | TODO | — | |
 | 03 Core CRM and history | TODO | — | |
 | 04 Research schema, scoring, import/export | TODO | — | |
@@ -50,3 +50,19 @@ Resume from here after a context reset. Do not rerun completed phases.
 ## Blocked gates
 
 See `release-gates.md` and the unresolved list in `decisions.md` (U-01 to U-10). None block local implementation and synthetic tests.
+
+## Dependency versions (phase 01)
+
+Pinned in `backend/uv.lock` and `frontend/pnpm-lock.yaml`; base images pinned by digest.
+
+| Component | Version |
+|---|---|
+| Python image | 3.13 slim |
+| FastAPI / SQLAlchemy / Alembic | 0.142 / 2.1 / 1.20 |
+| psycopg / Celery / redis-py | 3.3 / 5.6 / 6.4 |
+| PostgreSQL / Redis | 17 / 7 |
+| Node image / pnpm | 24 / 11.22 |
+| React / Vite / TypeScript | 19.3 / 8.3 / 6.0 |
+| TanStack Query / React Router | 5.104 / 7.18 |
+
+TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeScript 7.
