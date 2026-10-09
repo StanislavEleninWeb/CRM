@@ -127,7 +127,19 @@ def test_an_expired_trial_restricts_writes_but_not_reading_export_or_billing(
     owner: TestClient, tenant: UUID, make_client: Any
 ) -> None:
     company = ok(owner.post(f"{API}/companies", json={"name": "Before the trial ended"}), 201)
-    key = ok(owner.post(f"{API}/api-keys", json={"name": "Agent", "scopes": ["crm.read", "crm.write"]}), 201)["key"]
+    to_erase = ok(owner.post(f"{API}/companies", json={"name": "Asked to be forgotten"}), 201)
+    created_key = ok(
+        owner.post(f"{API}/api-keys", json={"name": "Agent", "scopes": ["crm.read", "crm.write", "outreach.draft"]}),
+        201,
+    )
+    key = created_key["key"]
+    hook = ok(owner.post(f"{API}/webhook-endpoints", json={"url": "https://hooks.customer.example/crm"}), 201)
+    grant = ok(
+        owner.post(
+            f"{API}/support-grants", json={"grantee_email": "helper@example.test", "reason": "Looking into a problem"}
+        ),
+        201,
+    )
     ok(owner.get(f"{API}/entitlements"))
     sql(tenant, "UPDATE tenant_billing SET trial_ends_at = now() - interval '1 minute'")
 
@@ -139,7 +151,9 @@ def test_an_expired_trial_restricts_writes_but_not_reading_export_or_billing(
         ("POST", "/tasks", {"title": "x"}),
         ("POST", "/invitations", {"email": "rep@example.test", "role": "representative"}),
         ("POST", "/api-keys", {"name": "Another", "scopes": ["crm.read"]}),
-        ("DELETE", f"/companies/{company['id']}", None),
+        ("POST", "/email-drafts", {"lead_id": company["id"]}),
+        ("POST", "/webhook-endpoints", {"url": "https://hooks.customer.example/x"}),
+        ("POST", "/support-grants", {"grantee_email": "x@example.test", "reason": "Looking into a problem"}),
     ):
         refused = owner.request(method, f"{API}{path}", json=body)
         assert refused.status_code == 402 and refused.json()["error"]["code"] == "subscription_required", path
@@ -150,10 +164,46 @@ def test_an_expired_trial_restricts_writes_but_not_reading_export_or_billing(
     assert agent.get(f"{API}/companies").status_code == 200
 
     # Nothing was deleted, and the owner can still read, export and reach billing.
-    assert ok(owner.get(f"{API}/companies"))["total"] == 1
+    assert ok(owner.get(f"{API}/companies"))["total"] == 2
     assert owner.get(f"{API}/exports/prospects.xlsx").status_code == 200
     assert ok(owner.get(f"{API}/billing"))["standing"] == "restricted"
     assert ok(owner.post(f"{API}/billing/checkout", json={"plan_code": "test_starter"}))["url"]
+
+    # Not having paid never stops a workspace from reducing access, stopping contact or removing data.
+    assert (
+        agent.post(f"{API}/email-suppressions", json={"value": "optout@example.bg", "reason": "opt_out"}).status_code
+        == 201
+    )  # by key too
+    assert (
+        agent.post(
+            f"{API}/companies/{company['id']}/restrictions",
+            json={"channel_kind": "phone", "reason": "Asked not to be called"},
+        ).status_code
+        == 201
+    )
+    for method, path, body, expected in (
+        ("POST", "/email-suppressions", {"value": "another@example.bg"}, 201),
+        ("PATCH", f"/webhook-endpoints/{hook['id']}", {"status": "paused"}, 200),
+        ("DELETE", f"/webhook-endpoints/{hook['id']}", None, 204),
+        ("DELETE", f"/support-grants/{grant['id']}", None, 200),
+        ("PUT", "/retention", {"email_content_days": 30}, 200),
+        (
+            "POST",
+            f"/companies/{to_erase['id']}/erase",
+            {"reason": "Erasure requested by the business", "confirm_name": "Asked to be forgotten"},
+            200,
+        ),
+        ("DELETE", f"/api-keys/{created_key['id']}", None, 200),
+        ("POST", "/tenant/deletion", {"confirm_name": "SEWEB"}, 200),
+        ("DELETE", "/tenant/deletion", None, 200),
+    ):
+        allowed = owner.request(method, f"{API}{path}", json=body)
+        assert allowed.status_code == expected, (method, path, allowed.status_code, allowed.text[:200])
+    assert agent.get(f"{API}/companies").status_code == 401  # the revoked key
+    assert ok(owner.get(f"{API}/companies"))["total"] == 1
+    # The allow-list is exact: a path that merely contains "billing" is not a way round it.
+    assert owner.post(f"{API}/companies", json={"name": "billing"}).status_code == 402
+    assert owner.post(f"{API}/tasks?note=/billing/", json={"title": "x"}).status_code == 402
 
 
 def test_returning_from_checkout_grants_nothing_until_the_provider_confirms(
@@ -356,6 +406,30 @@ def test_past_due_has_a_grace_period_then_restricts_and_paying_restores(
     restored = ok(owner.get(f"{API}/billing"))
     assert restored["standing"] == "good" and restored["grace_until"] is None
     assert owner.post(f"{API}/companies", json={"name": "Back"}).status_code == 201
+
+
+def test_a_refusal_for_payment_is_not_remembered_against_an_idempotency_key(
+    owner: TestClient, tenant: UUID, stripe: FakeStripe, client: TestClient, make_client: Any
+) -> None:
+    key = ok(owner.post(f"{API}/api-keys", json={"name": "Agent", "scopes": ["crm.read", "crm.write"]}), 201)["key"]
+    agent = make_client()
+    agent.headers["Authorization"] = f"Bearer {key}"
+    ok(owner.get(f"{API}/entitlements"))
+    sql(tenant, "UPDATE tenant_billing SET trial_ends_at = now() - interval '1 minute'")
+    headers = {"Idempotency-Key": "create-acme"}
+    assert agent.post(f"{API}/companies", json={"name": "Acme"}, headers=headers).status_code == 402
+    customer = checkout(owner, stripe)
+    changed(client, stripe.subscribe(customer, "price_test_starter", quantity=3))
+    paid = agent.post(f"{API}/companies", json={"name": "Acme"}, headers=headers)
+    assert (
+        paid.status_code == 201 and "idempotency-replayed" not in paid.headers
+    )  # the same key works once the cause has passed
+    assert (
+        agent.post(f"{API}/companies", json={"name": "Acme"}, headers=headers).headers["idempotency-replayed"] == "true"
+    )
+    # A workspace with a running subscription cannot be scheduled for deletion: it would keep being charged.
+    refused = owner.post(f"{API}/tenant/deletion", json={"confirm_name": "SEWEB"})
+    assert refused.status_code == 409 and "Cancel it in billing first" in refused.json()["error"]["message"]
 
 
 def test_cancellation_takes_effect_at_the_end_of_the_paid_period(

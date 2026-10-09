@@ -78,6 +78,35 @@ def get_tokens() -> TokenSource:
     return _tokens
 
 
+def release_at_provider(tenant_id: UUID, mailbox: Any) -> list[str]:
+    """Withdraw what was granted at Google: stop notifications and revoke the authorisation.
+
+    Best effort, and done before the stored token is erased. Returns what could not be done, so it
+    can be recorded: wiping the local token alone stops this application but leaves the grant alive.
+    """
+    from app.modules.email.oauth import revoke_token
+
+    problems: list[str] = []
+    if mailbox["token_ciphertext"] is None:
+        return problems
+    try:
+        get_provider().stop(get_tokens().access_token(tenant_id, mailbox))
+    except Exception as exc:
+        problems.append(f"notifications could not be stopped ({type(exc).__name__})")
+    try:
+        refresh = get_keyring().open(
+            Sealed(bytes(mailbox["token_ciphertext"]), bytes(mailbox["token_nonce"]), mailbox["token_key_version"]),
+            tenant_id=tenant_id,
+            provider=mailbox["provider"],
+            connection_id=mailbox["id"],
+        )
+        if not revoke_token(refresh):
+            problems.append("the authorisation could not be revoked at Google; remove the app in the Google account")
+    except Exception as exc:
+        problems.append(f"the authorisation could not be revoked ({type(exc).__name__})")
+    return problems
+
+
 def _acquire(tenant_id: UUID, mailbox_id: UUID) -> tuple[Any, UUID] | None:
     """Take the per-mailbox lease in a short transaction. Returns None when another sync holds it."""
     lease = uuid4()

@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     external_gmail_verification_ref: str = ""
     external_gmail_assessment_valid_until: date | None = None
 
+    # Keys the hashes that remember erased businesses. Changing it un-erases them: every
+    # tombstone would have to be recreated. Falls back to the session secret when empty.
+    erasure_hash_key: str = ""
+
     # Billing. "off": every workspace has the internal pilot's allowances and nothing is charged.
     # "test": plans, trials and limits apply, against Stripe test mode. "live" is refused until
     # approved plans and a live account exist.

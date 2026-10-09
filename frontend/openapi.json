@@ -10093,6 +10093,32 @@
         "title": "Reject",
         "type": "object"
       },
+      "ReplyOutcome": {
+        "properties": {
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "positive",
+                  "neutral",
+                  "negative"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What a person judged the reply to be. None clears it.",
+            "title": "Outcome"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "ReplyOutcome",
+        "type": "object"
+      },
       "ReservationOut": {
         "properties": {
           "actual_amount": {
@@ -11705,6 +11731,18 @@
       "StageUpdate": {
         "additionalProperties": false,
         "properties": {
+          "is_proposal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opportunities entering this stage count as proposals in reports",
+            "title": "Is Proposal"
+          },
           "name": {
             "anyOf": [
               {
@@ -12006,7 +12044,8 @@
               "todo",
               "call",
               "follow_up",
-              "email"
+              "email",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -12159,7 +12198,8 @@
               "todo",
               "call",
               "follow_up",
-              "email"
+              "email",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -12493,6 +12533,23 @@
             },
             "title": "Messages",
             "type": "array"
+          },
+          "reply_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "positive",
+                  "neutral",
+                  "negative"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set by a person. Never inferred from the wording.",
+            "title": "Reply Outcome"
           },
           "subject": {
             "anyOf": [
@@ -17873,6 +17930,90 @@
         ]
       }
     },
+    "/api/v1/email-threads/{thread_id}/reply-outcome": {
+      "post": {
+        "description": "A person says whether a reply is positive. Nothing infers this from the wording.",
+        "operationId": "setReplyOutcome",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyOutcome"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Set Reply Outcome",
+        "tags": [
+          "email"
+        ]
+      }
+    },
     "/api/v1/entitlements": {
       "get": {
         "description": "What this workspace may do now, for every member.",
@@ -20010,7 +20151,7 @@
     },
     "/api/v1/mailboxes/{mailbox_id}": {
       "delete": {
-        "description": "Stop using a mailbox and erase its stored authorisation. Conversations already synchronised are kept.",
+        "description": "Stop using a mailbox, withdraw the authorisation at Google and erase the stored copy. Conversations are kept.",
         "operationId": "disconnectMailbox",
         "parameters": [
           {
@@ -22933,6 +23074,25 @@
               ],
               "title": "To"
             }
+          },
+          {
+            "description": "Only what this member owns or reported. Mailbox figures are not per person.",
+            "in": "query",
+            "name": "owner_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only what this member owns or reported. Mailbox figures are not per person.",
+              "title": "Owner User Id"
+            }
           }
         ],
         "responses": {
@@ -23040,6 +23200,23 @@
                 }
               ],
               "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "owner_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Owner User Id"
             }
           }
         ],

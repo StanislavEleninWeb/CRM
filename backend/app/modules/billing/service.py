@@ -167,23 +167,14 @@ def handle_event(raw_body: bytes, signature: str) -> tuple[int, str]:
     customer = customer if isinstance(customer, str) else None
 
     with session_scope() as db:
-        seen = db.execute(
-            text(
-                "INSERT INTO billing_events (provider_event_id, event_type, provider_customer_id) VALUES (:id, :type, :c) "
-                "ON CONFLICT (provider_event_id) DO NOTHING RETURNING provider_event_id"
-            ),
-            {"id": event_id, "type": event_type, "c": customer},
-        ).scalar()
-        if seen is None:
-            done = db.execute(
-                text("SELECT processed_at FROM billing_events WHERE provider_event_id = :id"), {"id": event_id}
-            ).scalar()
-            if done is not None:
-                return 200, "duplicate"
         # The tenant comes from the mapping stored at checkout, never from the event.
-        tenant_id = (
-            db.execute(text("SELECT billing_customer_tenant(:c)"), {"c": customer}).scalar() if customer else None
-        )
+        begun = db.execute(
+            text("SELECT * FROM billing_event_begin(:id, :type, :c)"),
+            {"id": event_id, "type": event_type, "c": customer},
+        ).one()
+        if begun.already_done:
+            return 200, "duplicate"
+        tenant_id = begun.tenant_id
 
     outcome = "no known customer"
     if tenant_id is not None:
@@ -195,8 +186,5 @@ def handle_event(raw_body: bytes, signature: str) -> tuple[int, str]:
             except BillingError:
                 return 503, "provider unavailable; send again"  # not marked processed, so the retry does the work
     with session_scope() as db:
-        db.execute(
-            text("UPDATE billing_events SET processed_at = now(), outcome = :o WHERE provider_event_id = :id"),
-            {"o": outcome, "id": event_id},
-        )
+        db.execute(text("SELECT billing_event_finish(:id, :o)"), {"id": event_id, "o": outcome})
     return 200, outcome

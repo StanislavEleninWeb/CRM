@@ -932,6 +932,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/email-threads/{thread_id}/reply-outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Reply Outcome
+         * @description A person says whether a reply is positive. Nothing infers this from the wording.
+         */
+        post: operations["setReplyOutcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entitlements": {
         parameters: {
             query?: never;
@@ -1347,7 +1367,7 @@ export interface paths {
         post?: never;
         /**
          * Disconnect Mailbox
-         * @description Stop using a mailbox and erase its stored authorisation. Conversations already synchronised are kept.
+         * @description Stop using a mailbox, withdraw the authorisation at Google and erase the stored copy. Conversations are kept.
          */
         delete: operations["disconnectMailbox"];
         options?: never;
@@ -5787,6 +5807,14 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** ReplyOutcome */
+        ReplyOutcome: {
+            /**
+             * Outcome
+             * @description What a person judged the reply to be. None clears it.
+             */
+            outcome: ("positive" | "neutral" | "negative") | null;
+        };
         /** ReservationOut */
         ReservationOut: {
             /** Actual Amount */
@@ -6400,6 +6428,11 @@ export interface components {
         };
         /** StageUpdate */
         StageUpdate: {
+            /**
+             * Is Proposal
+             * @description Opportunities entering this stage count as proposals in reports
+             */
+            is_proposal?: boolean | null;
             /** Name */
             name?: string | null;
             /** Position */
@@ -6496,7 +6529,7 @@ export interface components {
              * @default todo
              * @enum {string}
              */
-            kind?: "todo" | "call" | "follow_up" | "email";
+            kind?: "todo" | "call" | "follow_up" | "email" | "meeting";
             /** Lead Id */
             lead_id?: string | null;
             /** Title */
@@ -6536,7 +6569,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "todo" | "call" | "follow_up" | "email";
+            kind: "todo" | "call" | "follow_up" | "email" | "meeting";
             /** Lead Id */
             lead_id: string | null;
             /**
@@ -6638,6 +6671,11 @@ export interface components {
              * @default []
              */
             messages?: components["schemas"]["MessageOut"][];
+            /**
+             * Reply Outcome
+             * @description Set by a person. Never inferred from the wording.
+             */
+            reply_outcome?: ("positive" | "neutral" | "negative") | null;
             /** Subject */
             subject: string | null;
         };
@@ -10551,6 +10589,68 @@ export interface operations {
             };
         };
     };
+    setReplyOutcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyOutcome"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     getEntitlements: {
         parameters: {
             query?: never;
@@ -14186,6 +14286,8 @@ export interface operations {
             query?: {
                 from?: string | null;
                 to?: string | null;
+                /** @description Only what this member owns or reported. Mailbox figures are not per person. */
+                owner_user_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -14246,6 +14348,7 @@ export interface operations {
                 metric: string;
                 from?: string | null;
                 to?: string | null;
+                owner_user_id?: string | null;
             };
             header?: never;
             path?: never;

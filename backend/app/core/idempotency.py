@@ -8,7 +8,8 @@ What this does not promise: if the server stops, or answers with a server error,
 doing the work and recording the answer, the record stays "in progress" and later attempts
 are refused rather than run again. The client then has to read the current state. A
 request with a key is never executed twice. Answers that say "not now" (rate limited, key
-not accepted) are not recorded, so the same key can be used when the cause has passed.
+not accepted, subscription or plan limit) are not recorded, so the same key can be used when
+the cause has passed.
 """
 
 import hashlib
@@ -134,7 +135,7 @@ class IdempotencyMiddleware:
             await self.app(scope, replay_body, capture)
         finally:
             with session_scope(context) as db:
-                if captured["status"] in (401, 429):
+                if captured["status"] in (401, 402, 429) or b'"plan_limit_reached"' in captured["body"][:300]:
                     # Nothing was attempted: the same key may be used once the cause has passed.
                     db.execute(
                         text("DELETE FROM idempotency_keys WHERE tenant_id = :t AND api_key_id = :k AND key = :key"),

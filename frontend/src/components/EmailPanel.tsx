@@ -34,6 +34,7 @@ export function EmailPanel({ leadId }: { leadId: string }) {
     unwrap(api.GET("/api/v1/email-drafts", { params: { query: { lead_id: leadId } } })),
   );
   const refreshDrafts = () => queryClient.invalidateQueries({ queryKey: tenantKey(tenantId, draftsKey) });
+  const refreshThreads = () => queryClient.invalidateQueries({ queryKey: tenantKey(tenantId, threadsKey) });
   const [kind, setKind] = useState<"unsolicited" | "requested">("unsolicited");
   const kindId = useId();
 
@@ -59,6 +60,11 @@ export function EmailPanel({ leadId }: { leadId: string }) {
                 <span className="row-title">{thread.subject ?? "(no subject)"}</span>
                 <ConversationMessages thread={thread} timeZone={me.active_tenant?.timezone} />
               </div>
+              {thread.has_inbound ? (
+                <div className="row-actions">
+                  {can("crm.write") ? <ReplyOutcome thread={thread} onDone={refreshThreads} /> : null}
+                </div>
+              ) : null}
               {can("outreach.draft") && thread.has_inbound ? (
                 <div className="row-actions">
                   <button
@@ -104,6 +110,33 @@ export function EmailPanel({ leadId }: { leadId: string }) {
       ) : null}
       {start.isError ? <ErrorState error={start.error} /> : null}
     </section>
+  );
+}
+
+/** A person says how a reply reads. It is never worked out from the wording. */
+function ReplyOutcome({ thread, onDone }: { thread: Thread; onDone: () => Promise<void> }) {
+  const selectId = useId();
+  const mark = useMutation({
+    mutationFn: (outcome: "positive" | "neutral" | "negative" | null) =>
+      unwrap(api.POST("/api/v1/email-threads/{thread_id}/reply-outcome", { params: { path: { thread_id: thread.id } }, body: { outcome } })),
+    onSuccess: onDone,
+  });
+  return (
+    <div className="field">
+      <label htmlFor={selectId}>This reply is</label>
+      <select
+        id={selectId}
+        value={thread.reply_outcome ?? ""}
+        disabled={mark.isPending}
+        onChange={(e) => mark.mutate((e.target.value || null) as "positive" | "neutral" | "negative" | null)}
+      >
+        <option value="">Not judged</option>
+        <option value="positive">Positive</option>
+        <option value="neutral">Neutral</option>
+        <option value="negative">Negative</option>
+      </select>
+      {mark.isError ? <ErrorState error={mark.error} /> : null}
+    </div>
   );
 }
 

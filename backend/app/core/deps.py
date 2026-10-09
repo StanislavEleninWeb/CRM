@@ -17,7 +17,7 @@ from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core import apikeys
+from app.core import access_policy, apikeys
 from app.core.config import get_settings
 from app.core.db import RlsContext, session_scope
 from app.core.errors import PermissionDeniedError, UnauthenticatedError
@@ -167,14 +167,18 @@ def get_tenant_context(principal: CurrentPrincipal, request: Request) -> Iterato
             # Not a member: the only other way in is support access the owner granted, and only while it lasts.
             support = session.execute(
                 text(
-                    "SELECT include_communications FROM support_grants WHERE tenant_id = :t AND grantee_user_id = :u "
-                    "AND revoked_at IS NULL AND expires_at > now() ORDER BY expires_at DESC LIMIT 1"
+                    "SELECT bool_or(include_communications) AS include_communications FROM support_grants "
+                    "WHERE tenant_id = :t AND revoked_at IS NULL AND expires_at > now() "
+                    "AND (grantee_user_id = :u OR grantee_email = (SELECT email FROM users WHERE id = :u)) HAVING count(*) > 0"
                 ),
                 {"t": principal.active_tenant_id, "u": principal.user_id},
             ).one_or_none()
+        route_path = getattr(request.scope.get("route"), "path", "")
         if support is not None:
             if request.method not in SAFE_METHODS:
                 raise PermissionDeniedError("Support access is read-only.")
+            if not access_policy.support_may_read(route_path, bool(support.include_communications)):
+                raise PermissionDeniedError("This support access does not include this.")
             yield TenantContext(
                 principal=principal,
                 tenant_id=principal.active_tenant_id,
@@ -191,9 +195,12 @@ def get_tenant_context(principal: CurrentPrincipal, request: Request) -> Iterato
         if principal.api_key_id is not None:
             # Carried on the session so every audit entry written in this request names the key.
             session.info["api_key_id"] = str(principal.api_key_id)
-        if request.method not in SAFE_METHODS and "/billing" not in request.url.path:
-            # A restricted workspace can read, export and reach billing. Enforced here, so it holds for
-            # people and API keys alike, whatever the page shows.
+        if (
+            request.method not in SAFE_METHODS
+            and (request.method, route_path) not in access_policy.ALLOWED_WHEN_RESTRICTED
+        ):
+            # A restricted workspace can read, export, reach billing, and always reduce access, stop contact
+            # or remove data. Enforced here, so it holds for people and API keys alike, whatever the page shows.
             from app.modules.billing import entitlements
 
             entitlement = entitlements.evaluate(session, principal.active_tenant_id)

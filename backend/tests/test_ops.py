@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import zipfile
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -64,7 +65,8 @@ def test_an_empty_workspace_reports_no_data_rather_than_zero_percent(owner: Test
     assert metric(report, "reported_calls")["value"] == 0  # a count of nothing is zero
     assert all(m["definition"] and m["basis"] for m in report["metrics"])
     assert report["won_amounts"] == [] and report["research_costs"] == []
-    assert any("never inferred" in line for line in report["not_collected"])
+    assert any("opens and clicks" in line for line in report["not_collected"])
+    assert metric(report, "positive_replies")["value"] is None and metric(report, "meetings_booked")["value"] == 0
     assert owner.get(f"{API}/reports/funnel", params={"from": "2026-11-01", "to": "2026-10-01"}).status_code == 422
     assert owner.get(f"{API}/reports/funnel", params={"from": "2024-01-01", "to": "2026-10-01"}).status_code == 422
 
@@ -330,13 +332,16 @@ def test_an_erased_business_is_gone_and_does_not_come_back(owner: TestClient, te
     assert owner.get(f"{API}/companies/{company_id}").status_code == 404
     assert [item["external_id"] for item in ok(owner.get(f"{API}/leads"))["items"]] == ["X-002"]
     assert owner.get(f"{API}/email-drafts/{draft['id']}").status_code == 404
-    for table in ("notes", "attachments", "contact_channels", "lead_assessments", "activities"):
-        remaining = (
-            sql(tenant, f"SELECT count(*) AS n FROM {table} WHERE company_id = :c", c=company_id)
-            if table != "lead_assessments"
-            else [{"n": 0}]
-        )
-        assert remaining[0]["n"] == 0, table
+    for table in ("notes", "attachments", "contact_channels", "activities"):
+        left = sql(tenant, f"SELECT count(*) AS n FROM {table} WHERE company_id = :c", c=company_id)
+        assert left[0]["n"] == 0, table
+    for table in ("lead_assessments", "observations", "lead_scores"):
+        left = sql(tenant, f"SELECT count(*) AS n FROM {table} WHERE lead_id = :l", l=leads["X-001"]["id"])
+        assert left[0]["n"] == 0, table
+    # The imported row and the uploaded list that held it are gone too; the other business's row is kept.
+    kept_rows = sql(tenant, "SELECT external_id, raw::text AS raw FROM import_rows")
+    assert [r["external_id"] for r in kept_rows] == ["X-002"] and "office@example-salon.bg" not in json.dumps(kept_rows)
+    assert result["removed"]["uploaded lists removed from storage"] == 1
     with pytest.raises(Exception):  # noqa: B017 - the object is gone from storage
         get_storage().get(storage_key)
     # What is kept: that this address must not be emailed, and hashes that identify nothing by themselves.
@@ -362,6 +367,10 @@ def test_an_erased_business_is_gone_and_does_not_come_back(owner: TestClient, te
         )
     ]
     import_and_commit(owner, workbook_bytes(renumbered))
+    assert ok(owner.get(f"{API}/companies"))["total"] == 1
+    # ... and with only the email address in common: no website, a new number, a different name.
+    by_email = [lead_row("Q-777", "Completely Different Name", **{"Public business email": "OFFICE@example-salon.bg"})]
+    import_and_commit(owner, workbook_bytes(by_email))
     assert ok(owner.get(f"{API}/companies"))["total"] == 1
     # 2. Mail from that address arrives in the mailbox: it is not stored.
     mailbox = uuid4()
@@ -499,9 +508,10 @@ def test_support_access_is_granted_by_the_owner_limited_logged_and_expires(
     grant = {"grantee_email": "Other@Example.test", "hours": 2, "reason": "Investigating why the import shows no rows"}
     assert owner.post(f"{API}/support-grants", json={**grant, "hours": 100}).status_code == 422  # at most 72 hours
     assert owner.post(f"{API}/support-grants", json={**grant, "reason": "help"}).status_code == 422
-    assert (
-        owner.post(f"{API}/support-grants", json={**grant, "grantee_email": "nobody@example.test"}).status_code == 422
-    )
+    # An address with no account is accepted like any other, so the form cannot be used to find out who has one.
+    unknown = ok(owner.post(f"{API}/support-grants", json={**grant, "grantee_email": "nobody@example.test"}), 201)
+    ok(owner.delete(f"{API}/support-grants/{unknown['id']}"))
+    assert owner.post(f"{API}/support-grants", json={**grant, "grantee_email": "not an address"}).status_code == 422
     admin = make_client()
     sign_in(admin, "admin@example.test")
     join(owner, admin, "admin@example.test", "administrator")
@@ -536,7 +546,8 @@ def test_support_access_is_granted_by_the_owner_limited_logged_and_expires(
     started = [e for e in events if e["action"] == "support.access_started"]
     assert len(started) == 1 and started[0]["actor_type"] == "support" and started[0]["target_id"] == created["id"]
     assert "support.access_granted" in [e["action"] for e in events]
-    assert ok(owner.get(f"{API}/support-grants"))[0]["first_used_at"] is not None
+    used = next(g for g in ok(owner.get(f"{API}/support-grants")) if g["id"] == created["id"])
+    assert used["first_used_at"] is not None
 
     # Communications only when the owner says so.
     with_mail = ok(owner.post(f"{API}/support-grants", json={**grant, "include_communications": True}), 201)
@@ -553,9 +564,198 @@ def test_support_access_is_granted_by_the_owner_limited_logged_and_expires(
         )
     assert support.get(f"{API}/companies").status_code == 403
     assert support.post(f"{API}/auth/switch-tenant", json=switch).status_code == 403
-    assert ok(owner.get(f"{API}/support-grants"))[1]["active"] is False
+    assert not any(g["active"] for g in ok(owner.get(f"{API}/support-grants")))
     # And an ordinary member never sees the audit log.
     rep = make_client()
     sign_in(rep, "rep@example.test")
     join(owner, rep, "rep@example.test", "representative")
     assert rep.get(f"{API}/audit-events").status_code == 403 and rep.get(f"{API}/support-grants").status_code == 403
+
+
+def test_erasure_waits_for_an_email_in_flight_and_cancels_one_that_is_waiting(owner: TestClient, tenant: UUID) -> None:
+    row = lead_row("E-001", "Salon Aurora", **{"Public business email": "office@example-salon.bg"})
+    import_and_commit(owner, workbook_bytes([row]))
+    lead = ok(owner.get(f"{API}/leads"))["items"][0]
+    mailbox, draft, intent = uuid4(), uuid4(), uuid4()
+    sql(
+        tenant,
+        "INSERT INTO mailboxes (id, tenant_id, provider, email_address, mode, status) "
+        "VALUES (:m, :t, 'gmail', 'sales@seweb.example', 'internal', 'active')",
+        m=mailbox,
+    )
+    sql(
+        tenant,
+        "INSERT INTO email_drafts (id, tenant_id, mailbox_id, lead_id, company_id, kind, to_address, subject, body_text, status) "
+        "VALUES (:d, :t, :m, :l, :c, 'unsolicited', 'office@example-salon.bg', 's', 'b', 'queued')",
+        d=draft,
+        m=mailbox,
+        l=lead["id"],
+        c=lead["company_id"],
+    )
+    sql(
+        tenant,
+        "INSERT INTO send_intents (id, tenant_id, draft_id, mailbox_id, draft_version, content_hash, to_address, kind, "
+        "scheduled_for, rfc_message_id, state) VALUES (:i, :t, :d, :m, 1, 'h', 'office@example-salon.bg', 'unsolicited', "
+        "now(), '<x@seweb.example>', 'dispatching')",
+        i=intent,
+        d=draft,
+        m=mailbox,
+    )
+    body = {"reason": "Erasure requested by the business", "confirm_name": "Salon Aurora"}
+    for state in ("dispatching", "unknown"):
+        sql(tenant, "UPDATE send_intents SET state = :s", s=state)
+        refused = owner.post(f"{API}/companies/{lead['company_id']}/erase", json=body)
+        assert refused.status_code == 409 and "Settle it under Email" in refused.json()["error"]["message"], state
+        assert sql(tenant, "SELECT count(*) AS n FROM send_intents")[0]["n"] == 1  # the record to settle is kept
+    assert ok(owner.get(f"{API}/companies"))["total"] == 1
+    # A message that has not started sending is cancelled, then removed with everything else.
+    sql(tenant, "UPDATE send_intents SET state = 'queued'")
+    ok(owner.post(f"{API}/companies/{lead['company_id']}/erase", json=body))
+    assert sql(tenant, "SELECT count(*) AS n FROM send_intents")[0]["n"] == 0
+    assert ok(owner.get(f"{API}/companies"))["total"] == 0
+    cancelled = sql(tenant, "SELECT payload FROM outbox_events WHERE event_type = 'email.send.cancelled'")
+    assert cancelled and "erased on request" in cancelled[0]["payload"]["reason"]
+
+
+def test_support_access_can_read_only_what_is_on_its_list(
+    owner: TestClient, tenant: UUID, make_client: Any, client: TestClient
+) -> None:
+    from app.core import access_policy
+
+    support = make_client()
+    sign_in(support, "other@example.test")
+    create_workspace(support, "Support staff home")
+    grant = {"grantee_email": "other@example.test", "hours": 1, "reason": "Checking a display problem"}
+    ok(owner.post(f"{API}/support-grants", json=grant), 201)
+    assert support.post(f"{API}/auth/switch-tenant", json={"tenant_id": str(tenant)}).status_code == 204
+    spec = client.get(f"{API}/openapi.json").json()
+    # Routes that do not act inside a workspace at all.
+    outside = {
+        "/auth/me", "/auth/sessions", "/auth/login", "/auth/callback", "/invitations/lookup", "/system/info",
+        "/system/readiness", "/mailboxes/gmail/callback",
+    }  # fmt: skip
+    opened, refused = set(), set()
+    for full_path, operations in spec["paths"].items():
+        template = full_path.removeprefix(API)
+        if "get" not in operations or template in outside:
+            continue
+        concrete = re.sub(r"\{[^}]+\}", str(uuid4()), full_path)
+        response = support.get(concrete, params={"metric": "replies", "needs_review": True}, follow_redirects=False)
+        (refused if response.status_code == 403 else opened).add(template)
+    # Every read route was tried, and exactly the listed ones are open. A new route is closed until someone lists it.
+    assert opened == set(access_policy.SUPPORT_READABLE), opened ^ set(access_policy.SUPPORT_READABLE)
+    assert set(access_policy.SUPPORT_COMMUNICATIONS) <= refused
+    for path in (
+        "/send-intents", "/workspace/attention", "/reports/records", "/activities", "/email-suppressions", "/mailboxes",
+        "/email-sending", "/notes", "/audit-events", "/members", "/api-keys", "/billing", "/retention", "/tenant/deletion",
+    ):  # fmt: skip
+        assert path in refused, path
+    # With communications included, those open and nothing else does.
+    ok(owner.post(f"{API}/support-grants", json={**grant, "include_communications": True}), 201)
+    assert support.get(f"{API}/send-intents").status_code == 200
+    assert support.get(f"{API}/activities").status_code != 403  # open; it then asks which record
+    assert support.get(f"{API}/audit-events").status_code == 403
+    assert support.get(f"{API}/api-keys").status_code == 403
+
+
+def test_the_report_counts_what_the_application_itself_records(owner: TestClient, tenant: UUID) -> None:
+    """Built through the API only, so a figure cannot silently stop matching what the screens write."""
+    import_and_commit(owner, workbook_bytes([lead_row("R-001", "Salon Aurora")]))
+    lead = ok(owner.get(f"{API}/leads"))["items"][0]
+    me = ok(owner.get(f"{API}/auth/me"))["user"]["id"]
+    phone = next(c for c in ok(owner.get(f"{API}/prospects/{lead['id']}"))["channels"] if c["kind"] == "phone")
+    call = ok(owner.post(f"{API}/prospects/{lead['id']}/calls", json={"channel_id": phone["id"]}), 201)
+    follow_up = {
+        "outcome": "follow_up_requested",
+        "follow_up_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
+        "follow_up_scope": "Booking demo",
+    }
+    ok(owner.post(f"{API}/calls/{call['id']}/outcome", json=follow_up))
+    ok(owner.post(f"{API}/tasks", json={"title": "Demo with the owner", "kind": "meeting", "lead_id": lead["id"]}), 201)
+    pipeline = ok(owner.get(f"{API}/pipelines"))[0]
+    proposal = next((s for s in pipeline["stages"] if s["name"].lower().startswith("proposal")), None)
+    won = next(s for s in pipeline["stages"] if s["kind"] == "won")
+    new_deal = {"company_id": lead["company_id"], "title": "Booking system", "amount": "1200", "currency": "EUR"}
+    deal = ok(owner.post(f"{API}/deals", json=new_deal), 201)
+    if proposal is not None:
+        ok(owner.patch(f"{API}/deals/{deal['id']}", json={"stage_id": proposal["id"]}))
+    ok(owner.patch(f"{API}/deals/{deal['id']}", json={"stage_id": won["id"]}))
+
+    report = ok(owner.get(f"{API}/reports/funnel"))
+    assert metric(report, "dialler_launches")["value"] == 1 and metric(report, "reported_calls")["value"] == 1
+    assert metric(report, "connected_call_rate")["value"] == 100.0
+    assert metric(report, "follow_up_permissions")["value"] == 1
+    assert metric(report, "callbacks_due")["value"] == 1  # the task the call outcome created, whatever kind it has
+    completion = metric(report, "follow_up_completion")
+    assert completion["value"] == 0.0 and completion["denominator"] == 1
+    assert metric(report, "meetings_booked")["value"] == 1
+    assert metric(report, "wins")["value"] == 1
+    assert report["won_amounts"] == [{"currency": "EUR", "amount": "1200.00", "basis": "entered on the opportunity"}]
+    if proposal is not None:
+        assert metric(report, "proposals")["value"] == 1
+    task = ok(owner.get(f"{API}/reports/records", params={"metric": "callbacks_due"}))[0]
+    ok(owner.patch(f"{API}/tasks/{task['id']}", json={"status": "done"}))
+    assert metric(ok(owner.get(f"{API}/reports/funnel")), "follow_up_completion")["value"] == 100.0
+    # Only what one member did, on request. Someone who did nothing has no data rather than zero percent.
+    mine = ok(owner.get(f"{API}/reports/funnel", params={"owner_user_id": me}))
+    assert metric(mine, "reported_calls")["value"] == 1
+    nobody = ok(owner.get(f"{API}/reports/funnel", params={"owner_user_id": str(uuid4())}))
+    assert metric(nobody, "reported_calls")["value"] == 0 and metric(nobody, "connected_call_rate")["value"] is None
+
+    # A reply is positive only when a person says so.
+    mailbox, thread = uuid4(), uuid4()
+    sql(
+        tenant,
+        "INSERT INTO mailboxes (id, tenant_id, provider, email_address, mode, status) "
+        "VALUES (:m, :t, 'gmail', 'sales@seweb.example', 'internal', 'active')",
+        m=mailbox,
+    )
+    sql(
+        tenant,
+        "INSERT INTO email_threads (id, tenant_id, mailbox_id, subject, lead_id, company_id, link_state, has_inbound) "
+        "VALUES (:th, :t, :m, 'Re: booking', :l, :c, 'linked', true)",
+        th=thread,
+        m=mailbox,
+        l=lead["id"],
+        c=lead["company_id"],
+    )
+    sql(
+        tenant,
+        "INSERT INTO email_messages (tenant_id, mailbox_id, thread_id, provider_message_id, direction, classification, subject, "
+        "body_text, sent_at) VALUES (:t, :m, :th, 'r1', 'inbound', 'reply', 'Re: booking', 'Yes please, we would love a demo!', now())",
+        m=mailbox,
+        th=thread,
+    )
+    before = ok(owner.get(f"{API}/reports/funnel"))
+    assert metric(before, "replies")["value"] == 1
+    assert metric(before, "positive_replies")["value"] is None  # enthusiastic wording changes nothing
+    marked = ok(owner.post(f"{API}/email-threads/{thread}/reply-outcome", json={"outcome": "positive"}))
+    assert marked["reply_outcome"] == "positive"
+    after = metric(ok(owner.get(f"{API}/reports/funnel")), "positive_replies")
+    assert (after["value"], after["numerator"], after["denominator"]) == (100.0, 1, 1)
+
+
+def test_the_security_log_is_purged_only_past_its_retention(
+    owner: TestClient, tenant: UUID, migrator_engine: Any
+) -> None:
+    ok(owner.put(f"{API}/retention", json={"audit_days": 365}))
+    with migrator_engine.begin() as conn:
+        conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenant)})
+        for action, age in (("old.event", 400), ("recent.event", 300)):
+            conn.execute(
+                text(
+                    "INSERT INTO audit_events (tenant_id, actor_type, action, target_type, origin, occurred_at) "
+                    "VALUES (:t, 'system', :a, 'test', 'api', now() - make_interval(days => :d))"
+                ),
+                {"t": tenant, "a": action, "d": age},
+            )
+    service.purge(tenant)
+    actions = [e["action"] for e in ok(owner.get(f"{API}/audit-events"))["items"]]
+    assert "recent.event" in actions and "old.event" not in actions
+    # The application's own database role still cannot delete from the log directly, or purge below a year.
+    with session_scope(RlsContext(tenant_id=tenant)) as db, pytest.raises(Exception, match="permission denied"):
+        db.execute(text("DELETE FROM audit_events"))
+    with session_scope(RlsContext(tenant_id=tenant)) as db, pytest.raises(Exception, match="365 days"):
+        db.execute(text("SELECT audit_events_purge(30)"))
+    with session_scope(RlsContext(tenant_id=tenant)) as db, pytest.raises(Exception, match="permission denied"):
+        db.execute(text("SELECT * FROM billing_events"))

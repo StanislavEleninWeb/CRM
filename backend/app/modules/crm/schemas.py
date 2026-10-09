@@ -9,7 +9,7 @@ ChannelKind = Literal["phone", "email", "website", "contact_page", "social", "me
 ChannelPurpose = Literal["general", "booking", "delivery", "emergency", "unknown"]
 Verification = Literal["unverified", "verified", "invalid"]
 LeadStatus = Literal["discovered", "needs_review", "qualified", "disqualified", "converted"]
-TaskKind = Literal["todo", "call", "follow_up", "email"]
+TaskKind = Literal["todo", "call", "follow_up", "email", "meeting"]
 TaskStatus = Literal["open", "done", "cancelled"]
 EntityType = Literal["company", "contact", "lead", "deal"]
 RestrictionKind = Literal["phone", "email", "any"]
@@ -423,6 +423,9 @@ class StageIn(Strict):
 class StageUpdate(Strict):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     position: int | None = Field(default=None, ge=0, le=100000)
+    is_proposal: bool | None = Field(
+        default=None, description="Opportunities entering this stage count as proposals in reports"
+    )
 
 
 class StageOut(BaseModel):

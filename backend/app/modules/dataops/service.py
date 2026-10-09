@@ -51,8 +51,15 @@ def settings_for(db: Session, tenant_id: UUID) -> dict[str, int]:
 
 def tombstone_hash(tenant_id: UUID, kind: str, value: str) -> str:
     """Keyed, per tenant: the hash cannot be matched across workspaces or reversed with a public list."""
-    key = hashlib.sha256(f"tombstone:{get_settings().session_secret}:{tenant_id}".encode()).digest()
+    settings = get_settings()
+    key = hashlib.sha256(
+        f"tombstone:{settings.erasure_hash_key or settings.session_secret}:{tenant_id}".encode()
+    ).digest()
     return hmac.new(key, f"{kind}:{value.strip().lower()}".encode(), hashlib.sha256).hexdigest()
+
+
+class ErasureBlocked(Exception):
+    """Erasing now would lose track of an email that may be on its way."""
 
 
 def is_erased(db: Session, tenant_id: UUID, candidates: list[tuple[str, str | None]]) -> bool:
@@ -80,6 +87,8 @@ def erase_company(
     db: Session, tenant_id: UUID, company_id: UUID, *, reason: str, erased_by: UUID | None
 ) -> dict[str, int]:
     """Remove a business and everything recorded about it, and remember enough to keep it gone."""
+    from app.modules.email import dispatch, eligibility
+
     scope = {"t": tenant_id, "c": company_id}
     company = db.execute(
         text("SELECT domain, external_id FROM companies WHERE tenant_id = :t AND id = :c FOR UPDATE"), scope
@@ -93,55 +102,125 @@ def erase_company(
         scope,
     ).all()
     leads = db.execute(text("SELECT id, external_id FROM leads WHERE tenant_id = :t AND company_id = :c"), scope).all()
-    listings = db.execute(
-        text(
-            "SELECT DISTINCT a.listing_id FROM lead_assessments a JOIN leads l ON l.tenant_id = a.tenant_id AND l.id = a.lead_id "
-            "WHERE a.tenant_id = :t AND l.company_id = :c AND a.listing_id IS NOT NULL"
-        ),
-        scope,
-    ).scalars()
-    marks: set[tuple[str, str]] = set()
+    lead_ids = [lead.id for lead in leads]
+    listing_ids = list(
+        db.execute(
+            text(
+                "SELECT DISTINCT a.listing_id FROM lead_assessments a WHERE a.tenant_id = :t AND a.lead_id = ANY(:leads) "
+                "AND a.listing_id IS NOT NULL"
+            ),
+            {**scope, "leads": lead_ids},
+        ).scalars()
+    )
     emails: list[str] = []
+    marks: set[tuple[str, str]] = set()
     for channel in channels:
         if channel.kind == "email" and (address := normalize_email(channel.value or "")):
             marks.add(("email", address))
             emails.append(address)
         elif channel.kind == "phone" and channel.value:
             marks.add(("phone", channel.value))
-    if company.domain:
-        marks.add(("domain", company.domain))
-    marks.update(
-        ("external_id", value) for value in [company.external_id, *[lead.external_id for lead in leads]] if value
-    )
-    marks.update(("listing_id", value) for value in listings)
+    domain = company.domain
+    external_ids = [value for value in [company.external_id, *[lead.external_id for lead in leads]] if value]
+    if domain:
+        marks.add(("domain", domain))
+    marks.update(("external_id", value) for value in external_ids)
+    marks.update(("listing_id", value) for value in listing_ids)
+    params = {
+        **scope,
+        "emails": emails,
+        "leads": lead_ids,
+        "ext": external_ids,
+        "domain": domain,
+        "listings": listing_ids,
+    }
 
-    counts: dict[str, int] = {}
-    files = (
+    # Same order as sending and opting out: the recipient first, then the rows.
+    for address in sorted(emails):
+        eligibility.lock_recipient(db, tenant_id, address)
+    sending = db.execute(
+        text(
+            "SELECT count(*) FROM send_intents i LEFT JOIN email_drafts d ON d.tenant_id = i.tenant_id AND d.id = i.draft_id "
+            "WHERE i.tenant_id = :t AND (i.state = 'dispatching' OR (i.state = 'unknown' AND i.resolved_at IS NULL)) "
+            "AND (i.to_address = ANY(CAST(:emails AS citext[])) OR d.company_id = :c OR d.lead_id = ANY(:leads))"
+        ),
+        params,
+    ).scalar_one()
+    if sending:
+        raise ErasureBlocked(
+            "An email to this business is being sent or its outcome is not known yet. Settle it under Email, then erase."
+        )
+    dispatch.cancel_waiting(
+        db,
+        tenant_id,
+        "(to_address = ANY(CAST(:emails AS citext[])) OR draft_id IN (SELECT id FROM email_drafts WHERE tenant_id = :t "
+        "AND (company_id = :c OR lead_id = ANY(:leads))))",
+        {"emails": emails, "c": company_id, "leads": lead_ids},
+        "The business was erased on request.",
+    )
+
+    files = list(
         db.execute(
             text("SELECT storage_key FROM attachments WHERE tenant_id = :t AND company_id = :c AND deleted_at IS NULL"),
             scope,
-        )
-        .scalars()
-        .all()
+        ).scalars()
     )
-    lead_ids = [lead.id for lead in leads]
-    for label, statement in (
+    row_match = (
+        "(r.lead_id = ANY(:leads) OR r.duplicate_lead_id = ANY(:leads) OR r.external_id = ANY(:ext) "
+        "OR (CAST(:domain AS text) IS NOT NULL AND r.data->'company'->>'domain' = :domain))"
+    )
+    # The original upload of any list that contained this business holds its row: those files are removed.
+    uploads = list(
+        db.execute(
+            text(
+                "SELECT DISTINCT i.storage_key FROM imports i JOIN import_rows r ON r.tenant_id = i.tenant_id AND r.import_id = i.id "
+                f"WHERE i.tenant_id = :t AND {row_match}"
+            ),
+            params,
+        ).scalars()
+    )
+    statements = (
+        ("imported rows", f"DELETE FROM import_rows r WHERE r.tenant_id = :t AND {row_match}"),
+        (
+            "research candidates",
+            "DELETE FROM research_candidates WHERE tenant_id = :t AND ((CAST(:domain AS text) IS NOT NULL AND domain = :domain) "
+            "OR listing_id = ANY(:listings) OR duplicate_lead_id = ANY(:leads))",
+        ),
         # Conversations and drafts are only loosely tied to the company, so they are removed by name.
-        ("send requests", "DELETE FROM send_intents WHERE tenant_id = :t AND (to_address = ANY(CAST(:emails AS citext[])) OR draft_id IN "
-                          "(SELECT id FROM email_drafts WHERE tenant_id = :t AND (company_id = :c OR lead_id = ANY(:leads))))"),
-        ("drafts", "DELETE FROM email_drafts WHERE tenant_id = :t AND (company_id = :c OR lead_id = ANY(:leads) OR to_address = ANY(CAST(:emails AS citext[])))"),
-        ("messages", "DELETE FROM email_messages WHERE tenant_id = :t AND thread_id IN (SELECT id FROM email_threads WHERE tenant_id = :t "
-                     "AND (company_id = :c OR lead_id = ANY(:leads)))"),
-        ("messages by address", "DELETE FROM email_messages WHERE tenant_id = :t AND (from_address = ANY(CAST(:emails AS citext[])) "
-                                "OR to_addresses && CAST(:emails AS citext[]))"),
-        ("conversations", "DELETE FROM email_threads th WHERE th.tenant_id = :t AND (th.company_id = :c OR th.lead_id = ANY(:leads) "
-                          "OR NOT EXISTS (SELECT 1 FROM email_messages m WHERE m.tenant_id = th.tenant_id AND m.thread_id = th.id))"),
-        ("recipient records", "DELETE FROM recipient_profiles WHERE tenant_id = :t AND address = ANY(CAST(:emails AS citext[]))"),
+        (
+            "send requests",
+            "DELETE FROM send_intents WHERE tenant_id = :t AND (to_address = ANY(CAST(:emails AS citext[])) OR draft_id IN "
+            "(SELECT id FROM email_drafts WHERE tenant_id = :t AND (company_id = :c OR lead_id = ANY(:leads))))",
+        ),
+        (
+            "drafts",
+            "DELETE FROM email_drafts WHERE tenant_id = :t AND (company_id = :c OR lead_id = ANY(:leads) "
+            "OR to_address = ANY(CAST(:emails AS citext[])))",
+        ),
+        (
+            "messages",
+            "DELETE FROM email_messages WHERE tenant_id = :t AND (from_address = ANY(CAST(:emails AS citext[])) "
+            "OR to_addresses && CAST(:emails AS citext[]) OR thread_id IN (SELECT id FROM email_threads WHERE tenant_id = :t "
+            "AND (company_id = :c OR lead_id = ANY(:leads))))",
+        ),
+        (
+            "conversations",
+            "DELETE FROM email_threads th WHERE th.tenant_id = :t AND (th.company_id = :c OR th.lead_id = ANY(:leads) "
+            "OR NOT EXISTS (SELECT 1 FROM email_messages m WHERE m.tenant_id = th.tenant_id AND m.thread_id = th.id))",
+        ),
+        (
+            "recipient records",
+            "DELETE FROM recipient_profiles WHERE tenant_id = :t AND address = ANY(CAST(:emails AS citext[]))",
+        ),
         ("consents", "DELETE FROM email_consents WHERE tenant_id = :t AND address = ANY(CAST(:emails AS citext[]))"),
-        ("eligibility decisions", "SELECT eligibility_decisions_erase(CAST(:emails AS text[]))"),
         ("company", "DELETE FROM companies WHERE tenant_id = :t AND id = :c"),
-    ):  # fmt: skip
-        counts[label] = db.execute(text(statement), {**scope, "emails": emails, "leads": lead_ids}).rowcount or 0  # type: ignore[attr-defined]
+    )
+    counts: dict[str, int] = {}
+    for label, statement in statements:
+        counts[label] = db.execute(text(statement), params).rowcount or 0  # type: ignore[attr-defined]
+    counts["eligibility decisions"] = int(
+        db.execute(text("SELECT eligibility_decisions_erase(CAST(:emails AS text[]))"), params).scalar() or 0
+    )
     for address in emails:
         # They asked to be forgotten; the one thing kept is that this address must not be emailed.
         db.execute(
@@ -160,13 +239,14 @@ def erase_company(
             {"t": tenant_id, "k": kind, "h": tombstone_hash(tenant_id, kind, value), "r": reason[:500], "u": erased_by},
         )
     storage = get_storage()
-    for key in files:
+    for key in [*files, *uploads]:
         try:
             storage.delete(key)
         except Exception as exc:  # the row is gone either way; an orphaned object is reported, not ignored
             log.error("erasure_file_delete_failed", storage_key=key, exc_info=exc)
             counts["files not removed from storage"] = counts.get("files not removed from storage", 0) + 1
     counts["files"] = len(files)
+    counts["uploaded lists removed from storage"] = len(uploads)
     counts["identifiers remembered"] = len(marks)
     return counts
 
@@ -190,6 +270,7 @@ def purge(tenant_id: UUID) -> dict[str, int]:
                               "AND finished_at < now() - make_interval(days => :n)", {"n": keep["finished_job_days"]}),
             ("idempotency records", "DELETE FROM idempotency_keys WHERE tenant_id = :t AND created_at < now() - make_interval(hours => :n)",
              {"n": keep["idempotency_hours"]}),
+            ("security log entries", "SELECT audit_events_purge(:n)", {"n": keep["audit_days"]}),
             ("expired support grants", "DELETE FROM support_grants WHERE tenant_id = :t AND expires_at < now() - interval '90 days'", {}),
         ):  # fmt: skip
             counts[label] = db.execute(text(statement), {**scope, **params}).rowcount or 0  # type: ignore[attr-defined]
@@ -221,6 +302,17 @@ def delete_handler(db: Session, tenant_id: UUID, ref_id: UUID | None, payload: d
     if due > utcnow():
         return due  # type: ignore[no-any-return]
     # Stored credentials and mailbox authorisations go first, so nothing can act for the workspace afterwards.
+    from app.modules.email import sync
+
+    for mailbox in (
+        db.execute(
+            text("SELECT * FROM mailboxes WHERE tenant_id = :t AND token_ciphertext IS NOT NULL"), {"t": tenant_id}
+        )
+        .mappings()
+        .all()
+    ):
+        for problem in sync.release_at_provider(tenant_id, mailbox):
+            log.warning("tenant_delete_provider_release", tenant_id=str(tenant_id), problem=problem)
     db.execute(
         text(
             "UPDATE mailboxes SET token_ciphertext = NULL, token_nonce = NULL, status = 'revoked' WHERE tenant_id = :t"

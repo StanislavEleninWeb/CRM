@@ -117,9 +117,9 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-120 | Funnel metrics | Totals reconcile with fixtures; honest zero denominators | DONE — period filter only; filters by owner, city or service not built |
+| CRM-120 | Funnel metrics | Totals reconcile with fixtures; honest zero denominators | DONE — filters: period and member. No filter by city or service; the member filter has no control in the interface yet |
 | CRM-121 | Daily workspace | Replies, follow-ups, stale deals, failures | DONE |
-| CRM-122 | Retention, export, deletion | Deleted records do not reappear | DONE — security-log purge and backup window not yet implemented (see `data-retention.md`) |
+| CRM-122 | Retention, export, deletion | Deleted records do not reappear | DONE — backup retention window not yet defined (needs hosting, U-07) |
 | CRM-123 | Support access | Expires and is logged | DONE |
 
 ## Phase 13 — staging and deployment pipeline (P0, depends on 12)

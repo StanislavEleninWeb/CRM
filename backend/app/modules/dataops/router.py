@@ -10,7 +10,6 @@ from uuid import UUID
 from fastapi import APIRouter
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 
 from app.core.deps import TenantContext, tenant_with
 from app.core.errors import ConflictError
@@ -110,7 +109,10 @@ def erase_company(company_id: UUID, body: EraseIn, ctx: TenantContext = DELETE) 
         one(ctx, "SELECT 1 WHERE false", {}, "Company not found.")
     if body.confirm_name.strip().casefold() != str(name).strip().casefold():
         raise ValidationFailed("The name does not match. Nothing was erased.")
-    counts = service.erase_company(ctx.db, ctx.tenant_id, company_id, reason=body.reason, erased_by=ctx.user_id)
+    try:
+        counts = service.erase_company(ctx.db, ctx.tenant_id, company_id, reason=body.reason, erased_by=ctx.user_id)
+    except service.ErasureBlocked as exc:
+        raise ConflictError(str(exc)) from exc
     # The audit entry records that it happened and why, without the name or any contact detail.
     record_audit(
         ctx.db, tenant_id=ctx.tenant_id, actor_id=ctx.user_id, action="company.erased", target_type="company",
@@ -194,6 +196,13 @@ def request_deletion(body: DeletionIn, ctx: TenantContext = OWNER) -> DeletionOu
     name = scalar(ctx, "SELECT name FROM tenants WHERE id = :tenant_id")
     if body.confirm_name.strip() != name:
         raise ValidationFailed("The workspace name does not match. Nothing was scheduled.")
+    live = scalar(
+        ctx,
+        "SELECT status FROM tenant_billing WHERE tenant_id = :tenant_id AND provider_subscription_id IS NOT NULL "
+        "AND status IN ('active', 'trialing', 'past_due', 'unpaid', 'incomplete')",
+    )
+    if live:
+        raise ConflictError("A subscription is still running and would keep being charged. Cancel it in billing first.")
     due = utcnow() + service.DELETION_GRACE
     execute(
         ctx,
@@ -288,20 +297,21 @@ def create_grant(body: GrantIn, ctx: TenantContext = OWNER) -> GrantOut:
     """Let one named person look at this workspace, read-only, for a limited time. Nobody has this access otherwise."""
     ctx.require_person("Granting support access")
     email = normalize_email(body.grantee_email)
-    grantee = ctx.db.execute(text("SELECT user_id_by_email(:e)"), {"e": email}).scalar() if email else None
-    if grantee is None:
-        raise ValidationFailed(
-            "That person has not signed in to this application yet, so access cannot be granted to them."
-        )
-    if scalar(ctx, "SELECT 1 FROM memberships WHERE tenant_id = :tenant_id AND user_id = :u", {"u": grantee}):
+    if email is None:
+        raise ValidationFailed("Enter a valid email address.")
+    # Whether that address has an account here is not revealed: the grant simply takes effect when its owner signs in.
+    if scalar(
+        ctx,
+        "SELECT 1 FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.tenant_id = :tenant_id AND u.email = :e",
+        {"e": email},
+    ):
         raise ConflictError("That person is already a member of this workspace.")
     grant_id = scalar(
         ctx,
-        "INSERT INTO support_grants (tenant_id, grantee_user_id, grantee_email, include_communications, reason, granted_by, expires_at) "
-        "VALUES (:tenant_id, :g, :mail, :c, :r, :u, :e) RETURNING id",
+        "INSERT INTO support_grants (tenant_id, grantee_email, include_communications, reason, granted_by, expires_at) "
+        "VALUES (:tenant_id, :mail, :c, :r, :u, :e) RETURNING id",
         {
             "mail": email,
-            "g": grantee,
             "c": body.include_communications,
             "r": body.reason.strip(),
             "u": ctx.user_id,

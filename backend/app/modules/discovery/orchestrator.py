@@ -364,7 +364,14 @@ def run_step(tenant_id: UUID, run_id: UUID) -> str:
             {"n": len(result.listings), "g": result.coverage_gap, "q": query["id"]},
         )
         tally: dict[str, int] = {"queries_done": 1, "evaluated": len(outcomes)}
+        from app.modules.dataops import service as dataops
+
         for outcome in outcomes:
+            if dataops.is_erased(
+                db, tenant_id, [("domain", outcome.get("domain")), ("listing_id", outcome.get("listing_id"))]
+            ):
+                tally["erased_skipped"] = tally.get("erased_skipped", 0) + 1  # erased on request: not brought back
+                continue
             _store_candidate(db, tenant_id, run_id, query["id"], outcome)
             tally["candidates"] = tally.get("candidates", 0) + 1
             tally[outcome["state"]] = tally.get(outcome["state"], 0) + 1

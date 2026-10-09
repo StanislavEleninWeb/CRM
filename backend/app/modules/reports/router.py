@@ -97,34 +97,52 @@ def _rate(numerator: int, denominator: int) -> float | None:
 RECORDS: dict[str, str] = {
     "qualified_leads": "SELECT 'lead' AS kind, l.id, c.name AS label, l.created_at AS at, '/prospects/' || l.id AS link FROM leads l "
     "JOIN companies c ON c.tenant_id = l.tenant_id AND c.id = l.company_id WHERE l.tenant_id = :tenant_id AND l.status = 'qualified' "
-    "AND l.created_at >= :s AND l.created_at < :e",
+    "AND l.created_at >= :s AND l.created_at < :e AND (CAST(:owner AS uuid) IS NULL OR l.owner_user_id = :owner)",
     "dialler_launches": "SELECT 'call' AS kind, a.id, c.name || ' - ' || a.dialed_value AS label, a.launched_at AS at, "
     "'/prospects/' || a.lead_id AS link FROM call_attempts a JOIN companies c ON c.tenant_id = a.tenant_id AND c.id = a.company_id "
-    "WHERE a.tenant_id = :tenant_id AND a.launched_at >= :s AND a.launched_at < :e",
+    "WHERE a.tenant_id = :tenant_id AND a.launched_at >= :s AND a.launched_at < :e AND (CAST(:owner AS uuid) IS NULL OR a.created_by = :owner)",
     "reported_calls": "SELECT 'call' AS kind, a.id, c.name || ' - ' || a.outcome AS label, a.outcome_reported_at AS at, "
     "'/prospects/' || a.lead_id AS link FROM call_attempts a JOIN companies c ON c.tenant_id = a.tenant_id AND c.id = a.company_id "
-    "WHERE a.tenant_id = :tenant_id AND a.outcome IS NOT NULL AND a.outcome_reported_at >= :s AND a.outcome_reported_at < :e",
+    "WHERE a.tenant_id = :tenant_id AND a.outcome IS NOT NULL AND a.outcome_reported_at >= :s AND a.outcome_reported_at < :e AND (CAST(:owner AS uuid) IS NULL OR a.created_by = :owner)",
     "connected_calls": "SELECT 'call' AS kind, a.id, c.name || ' - ' || a.outcome AS label, a.outcome_reported_at AS at, "
     "'/prospects/' || a.lead_id AS link FROM call_attempts a JOIN companies c ON c.tenant_id = a.tenant_id AND c.id = a.company_id "
     "WHERE a.tenant_id = :tenant_id AND a.outcome IN ('connected', 'follow_up_requested', 'not_interested') "
-    "AND a.outcome_reported_at >= :s AND a.outcome_reported_at < :e",
+    "AND a.outcome_reported_at >= :s AND a.outcome_reported_at < :e AND (CAST(:owner AS uuid) IS NULL OR a.created_by = :owner)",
     "follow_up_permissions": "SELECT 'call' AS kind, a.id, c.name || COALESCE(' - ' || a.follow_up_scope, '') AS label, "
     "a.outcome_reported_at AS at, '/prospects/' || a.lead_id AS link FROM call_attempts a JOIN companies c ON c.tenant_id = a.tenant_id "
     "AND c.id = a.company_id WHERE a.tenant_id = :tenant_id AND a.outcome = 'follow_up_requested' "
-    "AND a.outcome_reported_at >= :s AND a.outcome_reported_at < :e",
+    "AND a.outcome_reported_at >= :s AND a.outcome_reported_at < :e AND (CAST(:owner AS uuid) IS NULL OR a.created_by = :owner)",
+    # A follow-up is the task a reported call created (``call_attempts.follow_up_task_id``), whatever kind the task has.
     "callbacks_due": "SELECT 'task' AS kind, t.id, t.title AS label, t.due_at AS at, NULL AS link FROM tasks t "
-    "WHERE t.tenant_id = :tenant_id AND t.kind = 'follow_up' AND t.status <> 'cancelled' AND t.due_at >= :s AND t.due_at < :e",
+    "WHERE t.tenant_id = :tenant_id AND t.status <> 'cancelled' AND t.due_at >= :s AND t.due_at < :e "
+    "AND (t.kind = 'follow_up' OR EXISTS (SELECT 1 FROM call_attempts a WHERE a.tenant_id = t.tenant_id AND a.follow_up_task_id = t.id)) "
+    "AND (CAST(:owner AS uuid) IS NULL OR t.assignee_user_id = :owner)",
     "callbacks_completed": "SELECT 'task' AS kind, t.id, t.title AS label, t.completed_at AS at, NULL AS link FROM tasks t "
-    "WHERE t.tenant_id = :tenant_id AND t.kind = 'follow_up' AND t.status = 'done' AND t.due_at >= :s AND t.due_at < :e",
+    "WHERE t.tenant_id = :tenant_id AND t.status = 'done' AND t.due_at >= :s AND t.due_at < :e "
+    "AND (t.kind = 'follow_up' OR EXISTS (SELECT 1 FROM call_attempts a WHERE a.tenant_id = t.tenant_id AND a.follow_up_task_id = t.id)) "
+    "AND (CAST(:owner AS uuid) IS NULL OR t.assignee_user_id = :owner)",
+    "meetings_booked": "SELECT 'task' AS kind, t.id, t.title AS label, t.created_at AS at, NULL AS link FROM tasks t "
+    "WHERE t.tenant_id = :tenant_id AND t.kind = 'meeting' AND t.status <> 'cancelled' AND t.created_at >= :s AND t.created_at < :e "
+    "AND (CAST(:owner AS uuid) IS NULL OR t.assignee_user_id = :owner)",
+    "proposals": "SELECT 'deal' AS kind, d.id, d.title AS label, ch.created_at AS at, NULL AS link FROM deal_stage_changes ch "
+    "JOIN pipeline_stages st ON st.tenant_id = ch.tenant_id AND st.id = ch.to_stage_id JOIN deals d ON d.tenant_id = ch.tenant_id "
+    "AND d.id = ch.deal_id WHERE ch.tenant_id = :tenant_id AND st.is_proposal AND ch.created_at >= :s AND ch.created_at < :e "
+    "AND (CAST(:owner AS uuid) IS NULL OR d.owner_user_id = :owner)",
+    "positive_replies": "SELECT 'email' AS kind, th.id, COALESCE(th.subject, '(no subject)') AS label, th.reply_outcome_at AS at, "
+    "CASE WHEN th.lead_id IS NOT NULL THEN '/prospects/' || th.lead_id END AS link FROM email_threads th WHERE th.tenant_id = :tenant_id "
+    "AND th.reply_outcome = 'positive' AND th.reply_outcome_at >= :s AND th.reply_outcome_at < :e AND CAST(:owner AS uuid) IS NULL",
+    "judged_replies": "SELECT 'email' AS kind, th.id, COALESCE(th.subject, '(no subject)') AS label, th.reply_outcome_at AS at, "
+    "NULL AS link FROM email_threads th WHERE th.tenant_id = :tenant_id AND th.reply_outcome IS NOT NULL "
+    "AND th.reply_outcome_at >= :s AND th.reply_outcome_at < :e AND CAST(:owner AS uuid) IS NULL",
     "replies": "SELECT 'email' AS kind, m.id, COALESCE(m.subject, '(no subject)') AS label, m.sent_at AS at, "
     "CASE WHEN th.lead_id IS NOT NULL THEN '/prospects/' || th.lead_id END AS link FROM email_messages m JOIN email_threads th "
     "ON th.tenant_id = m.tenant_id AND th.id = m.thread_id WHERE m.tenant_id = :tenant_id AND m.direction = 'inbound' "
-    "AND m.classification = 'reply' AND m.sent_at >= :s AND m.sent_at < :e",
+    "AND m.classification = 'reply' AND m.sent_at >= :s AND m.sent_at < :e AND (CAST(:owner AS uuid) IS NULL OR true)",
     "emails_accepted": "SELECT 'email' AS kind, i.id, i.to_address::text AS label, i.accepted_at AS at, NULL AS link FROM send_intents i "
-    "WHERE i.tenant_id = :tenant_id AND i.state = 'provider_accepted' AND i.accepted_at >= :s AND i.accepted_at < :e",
+    "WHERE i.tenant_id = :tenant_id AND i.state = 'provider_accepted' AND i.accepted_at >= :s AND i.accepted_at < :e AND (CAST(:owner AS uuid) IS NULL OR true)",
     "wins": "SELECT 'deal' AS kind, d.id, d.title AS label, d.closed_at AS at, NULL AS link FROM deals d JOIN pipeline_stages st "
     "ON st.tenant_id = d.tenant_id AND st.id = d.stage_id WHERE d.tenant_id = :tenant_id AND st.kind = 'won' "
-    "AND d.closed_at >= :s AND d.closed_at < :e",
+    "AND d.closed_at >= :s AND d.closed_at < :e AND (CAST(:owner AS uuid) IS NULL OR d.owner_user_id = :owner)",
 }
 
 
@@ -137,9 +155,12 @@ def funnel(
     ctx: TenantContext = REPORTS,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
+    owner_user_id: Annotated[
+        UUID | None, Query(description="Only what this member owns or reported. Mailbox figures are not per person.")
+    ] = None,
 ) -> FunnelOut:
     start_day, end_day, start, end, zone = _window(ctx, date_from, date_to)
-    w = {"s": start, "e": end}
+    w = {"s": start, "e": end, "owner": owner_user_id}
     n = {key: _count(ctx, key, w) for key in RECORDS}
 
     response = one(
@@ -277,7 +298,7 @@ def funnel(
             drill="replies",
             basis="from_mailbox",
             definition="Incoming messages classified as a reply (not automatic replies or bounces) in the period.",
-            note="Whether a reply is positive is not recorded: nobody marks it, and it is not inferred.",
+            note="Whether a reply is positive is a separate figure, set by a person.",
         ),
         Metric(
             key="response_time",
@@ -288,6 +309,36 @@ def funnel(
             definition="For replies received in the period that were answered: hours from the reply to the next message sent in that "
             "conversation. Replies not yet answered are not included.",
             basis="from_mailbox",
+        ),
+        Metric(
+            key="positive_replies",
+            label="Replies judged positive",
+            value=_rate(n["positive_replies"], n["judged_replies"]),
+            unit="percent",
+            numerator=n["positive_replies"],
+            denominator=n["judged_replies"],
+            drill="positive_replies",
+            basis="reported_by_people",
+            definition="Conversations a person marked as a positive reply in the period, divided by all conversations a person judged "
+            "in the period. Replies nobody has judged are in neither number; nothing is inferred from the wording.",
+        ),
+        Metric(
+            key="meetings_booked",
+            label="Meetings booked",
+            value=n["meetings_booked"],
+            unit="count",
+            drill="meetings_booked",
+            basis="reported_by_people",
+            definition="Tasks of kind 'meeting' created by a person in the period, not cancelled. A meeting is never inferred from a message.",
+        ),
+        Metric(
+            key="proposals",
+            label="Proposals",
+            value=n["proposals"],
+            unit="count",
+            drill="proposals",
+            basis="reported_by_people",
+            definition="Opportunities moved into a stage marked as a proposal stage in the period.",
         ),
         Metric(
             key="wins",
@@ -357,10 +408,9 @@ def funnel(
         ],
         research_costs=cost_lines,
         not_collected=[
-            "Booked meetings: there is no meeting record yet, and a meeting is never inferred from the wording of a message.",
-            "Proposals: counted only as opportunities entering a stage; see the stage table.",
             "Email opens and clicks: not collected. They would be approximate at best.",
-            "Positive replies: not recorded.",
+            "Delivery: only acceptance by the mailbox provider, replies and bounces are known.",
+            "Per-person mailbox figures: emails and replies are counted for the whole workspace.",
         ],
     )
 
@@ -371,13 +421,16 @@ def records(
     ctx: TenantContext = REPORTS,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
+    owner_user_id: UUID | None = None,
 ) -> list[RecordOut]:
     """The records behind one figure, newest first."""
     if metric not in RECORDS:
         raise ValidationFailed("There is no list for that figure.")
     _, _, start, end, _ = _window(ctx, date_from, date_to)
     rows = many(
-        ctx, f"SELECT * FROM ({RECORDS[metric]}) q ORDER BY at DESC NULLS LAST LIMIT 200", {"s": start, "e": end}
+        ctx,
+        f"SELECT * FROM ({RECORDS[metric]}) q ORDER BY at DESC NULLS LAST LIMIT 200",
+        {"s": start, "e": end, "owner": owner_user_id},
     )
     return [RecordOut(**r) for r in rows]
 

@@ -15,11 +15,14 @@ Three things that are kept apart:
 | Calls reported | Call attempts with an outcome reported in the period | — | Reported by people |
 | Connected-call rate | Reported calls where someone was reached (connected, follow-up requested, not interested) | All calls with a reported outcome | Reported by people. Dialler openings are not in the denominator |
 | Asked to be contacted again | Reported calls with outcome "follow-up requested" | — | Reported by people |
-| Follow-ups due | Follow-up tasks due in the period, not cancelled | — | Application |
+| Follow-ups due | Tasks that a reported call created for a follow-up (or of kind "follow-up"), due in the period, not cancelled | — | Application |
 | Follow-ups completed | Of those, the ones marked done | Follow-ups due | Reported by people |
 | Emails accepted | Messages the mailbox provider accepted | — | Mailbox. Acceptance is not delivery |
 | Replies received | Incoming messages classified as replies (not automatic replies or bounces) | — | Mailbox |
 | Median time to answer a reply | Hours from a reply to the next message sent in that conversation | Replies that were answered | Mailbox. Unanswered replies are excluded, so this flatters slow responders |
+| Replies judged positive | Conversations a person marked positive in the period | Conversations a person judged in the period | Reported by people. Unjudged replies are in neither number |
+| Meetings booked | Tasks of kind "meeting" created in the period, not cancelled | — | Reported by people |
+| Proposals | Opportunities moved into a stage flagged as a proposal stage | — | Reported by people. A stage whose name starts with "Proposal" is flagged automatically; the flag can be changed |
 | Opportunities won | Deals closed in the period in a "won" stage | — | Reported by people |
 | Stage table | Deals entering each stage in the period; open deals now, with average and longest time in the current stage | — | Application |
 | Won amounts | Sum of amounts of won deals, **one line per currency** | — | As entered |
@@ -32,11 +35,12 @@ Rules:
 - Costs still reserved, or whose charge is unknown after a provider timeout, are listed separately and are not in the per-lead figure.
 - Nothing is confirmed by a telephone provider. Call figures are what people reported.
 
+Three figures exist only because a person records them, and are never inferred from the wording of a message or from a model's reading of it: whether a reply is positive, that a meeting was booked, and that a proposal was made.
+
 Not measured, and stated as such in the interface:
 
-- **Booked meetings.** There is no meeting record. A meeting is never inferred from the wording of a reply or from a model's reading of it.
-- **Proposals.** Only as deals entering a stage, if the pipeline has such a stage.
-- **Positive replies.** Nobody marks a reply as positive, and it is not inferred.
 - **Opens and clicks.** Not collected.
+- **Delivery.** Only acceptance by the mailbox provider, replies and bounces are known.
+- **Per-person mailbox figures.** Emails and replies are counted for the whole workspace.
 
-Known limits: figures are computed on request without caching; the records list behind a figure shows at most 200 entries; there are no filters other than the period (by owner, city or service would need the same queries with one more condition).
+Known limits: figures are computed on request without caching; the records list behind a figure shows at most 200 entries; filters are the period and, for figures about leads, calls, tasks and opportunities, one member (`owner_user_id`); there is no filter by city or service, and the member filter is not yet offered in the interface.

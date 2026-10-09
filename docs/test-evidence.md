@@ -453,3 +453,24 @@ What is covered:
 - Erasure removes mail by the business's recorded addresses. Mail from an address never recorded for it is not found.
 - "Stale" opportunities are those not updated for 14 days; the threshold is a constant.
 - Workspace deletion does not cancel a subscription or stop Gmail watches.
+
+## Phases 11–12 follow-up after review — 9 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 355 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 37 tests passed |
+| Migrations up, down to base, up again on a scratch database | Clean through revision 0013 |
+
+A review of phases 11 and 12 found the following; each was fixed and has a test.
+
+- **A workspace that had not paid could not reduce its own exposure.** The restriction refused every write except billing, including revoking an API key, ending support access, adding an opt-out, cancelling a queued email, erasing a business and deleting the workspace. There is now an explicit allow-list: a restricted owner succeeds on nine such actions (and an API key on the two it may call), while creating anything still gets 402. A path that merely contains the word "billing" is no longer a way round.
+- **Support access could read communications by side doors** (queued sends, the attention list, report records, activities, suppressions, mailbox status). Support access is now an allow-list. A test calls every GET route in the API as a grantee: exactly the listed routes answer, and adding communications opens only the communications list.
+- **Erasure ignored the send ordering rule and left copies.** It now takes the recipient lock first, refuses while an email to the business is being sent or its outcome is unknown, cancels a waiting one, and also removes the business's imported rows, the original uploaded files that contained it, and matching research candidates. Research runs no longer store an erased business as a candidate. A check that previously asserted nothing now queries assessments, observations and scores by the erased lead. Matching by email address alone (new number, new name, no website) is tested.
+- **A report figure did not match what the application records.** A follow-up created by a call outcome is a task of kind "call", so "follow-ups due" would have shown nothing in real use. It now counts the task the call created. A new test builds its data only through the API (call, outcome with follow-up, meeting, deal moved through proposal to won) so the figures cannot drift from the screens again.
+- **Three named figures were missing.** Positive replies, booked meetings and proposals now exist, each from something a person records; enthusiastic wording in a reply changes nothing until a person marks it.
+- **Withdrawing a mailbox only forgot the token locally.** Disconnecting and workspace deletion now stop Gmail notifications and revoke the authorisation at Google; if that fails, the audit entry says what is left to do by hand. Contract-tested against a mocked transport only.
+- Also: a payment refusal or a plan-limit refusal is no longer stored against an idempotency key; the security-log retention setting now has effect, through a function that cannot go below a year or outside the current workspace; a workspace with a running subscription cannot be scheduled for deletion; the erasure hashes have their own key; the application's database role can no longer read billing events of all tenants; granting support access no longer reveals whether an address has an account.
+
+Not covered by a test: that a research run skips an erased business (the check is in place and uses the same function the import and mailbox tests exercise).

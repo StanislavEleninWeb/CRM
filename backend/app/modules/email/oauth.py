@@ -195,6 +195,13 @@ class GoogleAuth:
             return False
         return claims.get("email") == settings.gmail_push_service_account and claims.get("email_verified") is True
 
+    def revoke(self, refresh_token: str) -> bool:
+        try:
+            response = self._http.post("https://oauth2.googleapis.com/revoke", data={"token": refresh_token})
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
+
     def refresh(self, refresh_token: str) -> str:
         try:
             response = self._http.post(
@@ -228,6 +235,11 @@ def get_google_auth() -> GoogleAuth:
 def set_google_auth(auth: GoogleAuth | None) -> None:
     global _auth
     _auth = auth
+
+
+def revoke_token(refresh_token: str) -> bool:
+    """Ask Google to withdraw the authorisation itself. Best effort: the caller records a failure."""
+    return get_google_auth().revoke(refresh_token)
 
 
 def refresh_access_token(refresh_token: str) -> str:

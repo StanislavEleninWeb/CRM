@@ -41,6 +41,8 @@ class Google:
         self.jwks = {"keys": [jwk]}
         self.token_response: dict[str, Any] = {}
         self.refresh_status = 200
+        self.revoked: list[str] = []
+        self.revoke_status = 200
 
     def id_token(self, **overrides: Any) -> str:
         now = int(time.time())
@@ -63,6 +65,9 @@ class Google:
     def handler(self, request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/certs"):
             return httpx.Response(200, json=self.jwks)
+        if request.url.path.endswith("/revoke"):
+            self.revoked.append(request.content.decode())
+            return httpx.Response(self.revoke_status)
         if request.url.path.endswith("/token"):
             form = dict(p.split("=", 1) for p in request.content.decode().split("&"))
             if form.get("grant_type") == "refresh_token":
@@ -1006,6 +1011,40 @@ def test_a_withdrawn_authorisation_is_shown_and_reconnecting_keeps_history(
     assert disconnected["status"] == "revoked" and state_of(gmail)["token_ciphertext"] is None
     with session_scope(RlsContext(tenant_id=gmail["tenant"])) as db:
         assert db.execute(text("SELECT count(*) FROM email_messages")).scalar() == 2  # conversations are kept
+
+
+def test_disconnecting_withdraws_the_authorisation_at_google_and_says_when_it_could_not(
+    owner: TestClient, gmail: dict[str, Any]
+) -> None:
+    box: FakeMailbox = gmail["box"]
+    first = connected(owner, gmail)
+    ok(owner.delete(f"{API}/mailboxes/{first['id']}"))
+    # Notifications are stopped and the grant itself is revoked, not just forgotten locally.
+    assert box.calls.count("stop") == 1 and gmail["google"].revoked == ["token=refresh-token-secret-1"]
+    event = next(e for e in ok(owner.get(f"{API}/audit-events"))["items"] if e["action"] == "mailbox.disconnected")
+    assert "not_released_at_provider" not in event["data"]
+
+    # Google is unreachable: the disconnect still happens here, and the record says what is left to do by hand.
+    connect(owner, gmail)
+    gmail["google"].revoke_status = 503
+    box.fail["stop"] = [MailboxError("The mailbox provider could not be reached.")]
+    again = ok(owner.delete(f"{API}/mailboxes/{first['id']}"))
+    assert again["status"] == "revoked" and state_of(gmail)["token_ciphertext"] is None
+    latest = next(e for e in ok(owner.get(f"{API}/audit-events"))["items"] if e["action"] == "mailbox.disconnected")
+    problems = latest["data"]["not_released_at_provider"]
+    assert len(problems) == 2 and any("remove the app in the Google account" in p for p in problems)
+    assert "refresh-token" not in json.dumps(ok(owner.get(f"{API}/audit-events")))
+
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={})
+
+    GmailProvider(httpx.Client(transport=httpx.MockTransport(handler))).stop("access-token")
+    assert calls[0].method == "POST" and str(calls[0].url).endswith("/gmail/v1/users/me/stop")
+    assert GoogleAuth(get_settings(), httpx.Client(transport=httpx.MockTransport(handler))).revoke("r-token") is True
+    assert str(calls[1].url) == "https://oauth2.googleapis.com/revoke" and calls[1].content == b"token=r-token"
 
 
 # --- conversations ---------------------------------------------------------------------------

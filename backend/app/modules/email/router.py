@@ -89,6 +89,9 @@ class ThreadOut(BaseModel):
     link_note: str | None
     last_message_at: datetime | None
     has_inbound: bool
+    reply_outcome: Literal["positive", "neutral", "negative"] | None = Field(
+        default=None, description="Set by a person. Never inferred from the wording."
+    )
     messages: list[MessageOut] = []
 
 
@@ -474,7 +477,14 @@ def sync_now(mailbox_id: UUID, ctx: TenantContext = MANAGE) -> MailboxOut:
     "/mailboxes/{mailbox_id}", response_model=MailboxOut, operation_id="disconnectMailbox", tags=["mailboxes"]
 )
 def disconnect_mailbox(mailbox_id: UUID, ctx: TenantContext = MANAGE) -> MailboxOut:
-    """Stop using a mailbox and erase its stored authorisation. Conversations already synchronised are kept."""
+    """Stop using a mailbox, withdraw the authorisation at Google and erase the stored copy. Conversations are kept."""
+    current = one(
+        ctx,
+        "SELECT * FROM mailboxes WHERE tenant_id = :tenant_id AND id = :id FOR UPDATE",
+        {"id": mailbox_id},
+        "Mailbox not found.",
+    )
+    problems = sync.release_at_provider(ctx.tenant_id, current)
     row = one(
         ctx,
         "UPDATE mailboxes SET status = 'revoked', token_ciphertext = NULL, token_nonce = NULL, token_key_version = NULL "
@@ -501,6 +511,7 @@ def disconnect_mailbox(mailbox_id: UUID, ctx: TenantContext = MANAGE) -> Mailbox
         action="mailbox.disconnected",
         target_type="mailbox",
         target_id=str(mailbox_id),
+        data={"not_released_at_provider": problems} if problems else None,
     )
     return _mailbox(row)
 
@@ -811,6 +822,30 @@ def discard_draft(draft_id: UUID, ctx: TenantContext = DRAFT) -> None:
         {"id": draft_id},
         "Draft not found or already sent.",
     )
+
+
+class ReplyOutcome(BaseModel):
+    outcome: Literal["positive", "neutral", "negative"] | None = Field(
+        description="What a person judged the reply to be. None clears it."
+    )
+
+
+@router.post(
+    "/email-threads/{thread_id}/reply-outcome", response_model=ThreadOut, operation_id="setReplyOutcome", tags=["email"]
+)
+def set_reply_outcome(
+    thread_id: UUID, body: ReplyOutcome, ctx: TenantContext = tenant_with(Permission.CRM_WRITE)
+) -> ThreadOut:
+    """A person says whether a reply is positive. Nothing infers this from the wording."""
+    ctx.require_person("Judging a reply")
+    one(
+        ctx,
+        "UPDATE email_threads SET reply_outcome = :o, reply_outcome_by = :u, reply_outcome_at = now() WHERE tenant_id = :tenant_id "
+        "AND id = :id AND has_inbound RETURNING id",
+        {"o": body.outcome, "u": ctx.user_id, "id": thread_id},
+        "There is no reply in that conversation.",
+    )
+    return _threads(ctx, "id = :id", {"id": thread_id})[0]
 
 
 # --- approving and sending -------------------------------------------------------------------

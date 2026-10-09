@@ -77,6 +77,7 @@ class MailboxProvider(Protocol):
     def list_messages(self, token: str, query: str, page_token: str | None) -> tuple[list[str], str | None]: ...
     def get_message(self, token: str, message_id: str) -> RawMessage | None: ...
     def send(self, token: str, raw: bytes, thread_id: str | None) -> tuple[str, str]: ...
+    def stop(self, token: str) -> None: ...
     def find_by_rfc_id(self, token: str, rfc_message_id: str) -> tuple[str, str] | None: ...
 
 
@@ -197,6 +198,10 @@ class GmailProvider:
             raise MailboxError(f"The mailbox provider refused the message ({response.status_code}).")
         data = response.json()
         return data["id"], data["threadId"]
+
+    def stop(self, token: str) -> None:
+        """Stop push notifications for the mailbox."""
+        self._ok(self._call("POST", f"{GMAIL}/stop", token))
 
     def find_by_rfc_id(self, token: str, rfc_message_id: str) -> tuple[str, str] | None:
         data = self._ok(
@@ -341,6 +346,10 @@ class FakeMailbox:
             if error is None:
                 return stored.id, stored.thread_id
         raise error
+
+    def stop(self, token: str) -> None:
+        self._maybe_fail("stop")
+        self.stopped = True
 
     def find_by_rfc_id(self, token: str, rfc_message_id: str) -> tuple[str, str] | None:
         self._maybe_fail("find_by_rfc_id")
