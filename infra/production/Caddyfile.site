@@ -1,6 +1,22 @@
-# Site block for a Caddy that already runs on the host. Add it to that Caddy's configuration
-# (or import this file) and reload Caddy. It obtains and renews the certificate for the name itself.
+# Site block for crm.seweb.co, for a Caddy that already runs on the host (today: the one that
+# belongs to the Hermes project). Import this file from that Caddy's configuration and reload it.
+#
+# The name is proxied by Cloudflare, so:
+#   - the certificate is a Cloudflare Origin Certificate installed by hand (Caddy cannot obtain a
+#     public one for a proxied name), and Cloudflare's SSL mode must be "Full (strict)";
+#   - only Cloudflare may connect: it presents a client certificate (Authenticated Origin Pulls),
+#     and a request that reaches the server's address directly is refused during the TLS handshake.
+#
+# Paths below are where this Caddy must be able to read the files. If Caddy runs in a container,
+# mount /etc/seweb-crm/edge read-only at the same path.
 crm.seweb.co {
+	tls /etc/seweb-crm/edge/origin.pem /etc/seweb-crm/edge/origin.key {
+		client_auth {
+			mode require_and_verify
+			trust_pool file /etc/seweb-crm/edge/cloudflare-origin-pull-ca.pem
+		}
+	}
+
 	encode zstd gzip
 
 	header {
@@ -21,10 +37,13 @@ crm.seweb.co {
 		request_body {
 			max_size 25MB
 		}
-		reverse_proxy 127.0.0.1:18000
+		reverse_proxy {$CRM_API_UPSTREAM:127.0.0.1:18000} {
+			# The visitor's address as Cloudflare saw it; the connecting address is always Cloudflare's.
+			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		}
 	}
 
 	handle {
-		reverse_proxy 127.0.0.1:18080
+		reverse_proxy {$CRM_FRONTEND_UPSTREAM:127.0.0.1:18080}
 	}
 }

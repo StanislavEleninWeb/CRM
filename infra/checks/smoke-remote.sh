@@ -14,5 +14,12 @@ curl --fail --silent --show-error --max-time 15 "$BASE_URL/api/v1/system/info" |
 [ "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "$BASE_URL/api/v1/companies")" = "401" ] || fail "an unauthenticated request was not refused"
 [ "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "$BASE_URL/ops/metrics")" = "404" ] || fail "the monitoring endpoint is reachable from outside"
 [ "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 "$BASE_URL/api/v1/docs")" = "404" ] || fail "interactive API documentation is exposed"
+curl --silent --head --max-time 15 "$BASE_URL/api/v1/system/info" | grep -qi '^cache-control:.*no-store' || fail "API answers are not marked no-store, so a proxy in front could keep them"
+if [ -n "${ORIGIN_IP:-}" ]; then
+  # Behind Cloudflare with Authenticated Origin Pulls, the server itself must refuse a direct connection.
+  host="$(echo "$BASE_URL" | sed 's#^https\?://##; s#/.*##')"
+  code="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 15 --resolve "$host:443:$ORIGIN_IP" "https://$host/readyz" || true)"
+  [ "$code" = "000" ] || fail "the server answered a direct connection that did not come through Cloudflare (HTTP $code)"
+fi
 case "$BASE_URL" in https://*) curl --silent --head --max-time 15 "$BASE_URL/" | grep -qi '^strict-transport-security:' || fail "HSTS header missing" ;; esac
 echo "Smoke test passed for $BASE_URL"

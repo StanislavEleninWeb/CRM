@@ -2,6 +2,7 @@
 
 # 161.97.89.47 already runs Caddy on ports 80 and 443, so the bundled proxy is not started and the
 # application is published on the loopback interface for that Caddy (see Caddyfile.site).
+# If that Caddy runs in a container, use compose.shared-network.yaml here instead (see production-setup.md).
 COMPOSE_EXTRA="-f /opt/seweb-crm/infra/production/compose.host-proxy.yaml"
 COMPOSE_PROFILES_ARGS=""
 START_PROXY=""
