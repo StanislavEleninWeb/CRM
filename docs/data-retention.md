@@ -37,7 +37,7 @@ Effect afterwards: importing the same list skips that business (also under a new
 
 The hashes are keyed with `ERASURE_HASH_KEY`. A hosted environment refuses to start without it; `make up` generates one locally (in development an empty value falls back to the session secret). **Changing that key silently un-erases every business**: set it once, back it up with the encryption keys, and do not rotate it without recreating the tombstones.
 
-Not reached by erasure: backups, exports already downloaded, events already delivered to your webhooks, and the mailbox itself.
+Not reached by erasure: backups, exports already downloaded, events already delivered to your webhooks, and the mailbox itself. In production, a deleted file also stays recoverable in the storage bucket for 7 days (earlier versions are kept that long to undo a mistake, then removed; `infra/terraform/s3.tf`).
 
 ## Deleting a workspace
 

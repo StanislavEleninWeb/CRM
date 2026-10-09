@@ -1,0 +1,7 @@
+# Copy to backend.hcl (not committed) and run:  terraform init -backend-config=backend.hcl
+# The state bucket is created once, by hand, before the first init: see README.md.
+bucket       = "CHANGE-ME-terraform-state-bucket"
+key          = "seweb-crm/production.tfstate"
+region       = "eu-central-1"
+encrypt      = true
+use_lockfile = true

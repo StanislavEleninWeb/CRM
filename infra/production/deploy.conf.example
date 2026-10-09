@@ -1,8 +1,8 @@
 # Copy to /etc/seweb-crm/deploy.conf on the host. Read by infra/deploy/deploy.sh.
 
-# 161.97.89.47 already runs Caddy on ports 80 and 443, so the bundled proxy is not started and the
-# application is published on the loopback interface for that Caddy (see Caddyfile.site).
-# If that Caddy runs in a container, use compose.shared-network.yaml here instead (see production-setup.md).
+# The server (164.68.126.141) already runs Apache for other projects. The CRM starts no proxy of its
+# own: its two services listen on the loopback interface, and Apache forwards to them
+# (infra/production/apache-crm.seweb.co.conf, installed once by hand).
 COMPOSE_EXTRA="-f /opt/seweb-crm/infra/production/compose.host-proxy.yaml"
 COMPOSE_PROFILES_ARGS=""
 START_PROXY=""

@@ -45,3 +45,12 @@ backups/
 .idea/
 .vscode/
 .pnpm-store/
+
+# Terraform: state and local settings hold secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+backend.hcl
+*.tfvars
+!*.tfvars.example

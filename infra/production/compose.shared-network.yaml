@@ -1,8 +1,8 @@
-# Use together with compose.yaml when the host's reverse proxy runs in a container. A container
-# cannot reach the host's loopback ports, so instead the proxy and this application share one
+# NOT used on the current production server, which runs Apache (see compose.host-proxy.yaml).
+# For a server whose reverse proxy is the shared Caddy container
+# (https://github.com/StanislavEleninWeb/caddy), use this file instead of compose.host-proxy.yaml. It and this application share one
 # Docker network, created once on the host:   docker network create edge
-# The proxy then forwards to crm-api:8000 and crm-frontend:8080 (set CRM_API_UPSTREAM and
-# CRM_FRONTEND_UPSTREAM for Caddyfile.site). No port of this application is published at all.
+# The proxy forwards to crm-api:8000 and crm-frontend:8080. No port of this application is published.
 services:
   api:
     networks:
