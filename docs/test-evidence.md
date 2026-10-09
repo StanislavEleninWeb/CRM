@@ -304,3 +304,39 @@ What is covered:
 - The register format is one address per line. The real register's format and access terms are unknown.
 - The fake mailbox models Gmail's documented history behaviour; differences in the real service would only show at the live gate.
 - The frontend shows message text only; the sanitised HTML is stored but not rendered.
+
+## Phase 09 — 9 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 289 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 29 tests passed |
+| GitHub Actions on pull request 2 (phases 00–08) | frontend and images passed; backend failed at lint because the linter could not write its cache in the mounted source tree. Caches now go to `/tmp`; not yet re-run on GitHub |
+
+**No email has been sent.** `EMAIL_DISPATCH` is `off` by default; the tests switch it on against a fake mailbox inside the test process. The dispatcher was exercised in-process with real PostgreSQL and concurrent threads, not through the separately running worker container (the fake mailbox lives in one process's memory). The scheduler-to-worker path for due rows in general was verified in phase 07.
+
+What is covered:
+
+- **The ordinary path.** Not approved: refused. Approved and requested: one row, nothing sent by the request. The due row is claimed, the message is built with the label, sender identification, opt-out link and one-click headers, handed to the mailbox once, and recorded as accepted. Asking again returns the same request. The sent message is attached to its prospect and a reply is recorded as delivery evidence.
+- **Off and dry run.** Off refuses requests. A dry run passes every check, never calls the provider, and returns the draft for a fresh approval. A request made live is stopped if sending is switched off before it is due.
+- **Approval binding.** Editing the text, subject or recipient withdraws approval. Changing the sender identification after approval blocks the request; the same change between request and dispatch blocks at the last check.
+- **Review.** A recipient needing review cannot be approved without a note; a review reason nobody looked at appearing later blocks at dispatch; a block cannot be approved, and the refused attempt is recorded.
+- **Before dispatch.** An opt-out through the signed link, a manual suppression, a register that became stale and a reply from the recipient each stop a waiting unsolicited message. A reply being written in the same conversation is not stopped, and is sent without the unsolicited label or unsubscribe headers.
+- **Cancellation.** A waiting message can be cancelled; one already sent cannot, and says so.
+- **Exactly once.** One poller gets the due row. Eight simultaneous workers — half as the same task delivered again, half as direct calls — produce one send and one activity.
+- **No lock across the network.** While the provider call is in flight, another connection locks the intent, draft, mailbox and due rows with `NOWAIT`, and PostgreSQL reports no idle-in-transaction session. An opt-out arriving at that moment is recorded and the in-flight message completes, as documented.
+- **Ambiguous outcomes.** A timeout after which the message did land is found by its message ID and recorded, with one send call in total. One that did not land is checked three times at growing intervals stored in the database, then waits for a person; it is never retried, a repeated request returns the same row, and only a manager can record the outcome. "Not sent" returns the draft for a new approval and a new request; "sent" closes it.
+- **Worker death.** After claiming: another worker takes over and sends once; the first worker's stale lease can neither send nor overwrite the result. After the point of no return: recovery marks it unknown and looks in the mailbox, without sending; a late success from the dead worker is still recorded.
+- **Limits.** The daily limit and the spacing between messages delay a message by rescheduling it in the database. A provider "slow down" is retried later a bounded number of times, then fails.
+- **Disconnected mailbox.** A withdrawn authorisation fails the send plainly, marks the mailbox, and a failure cannot be recorded as sent.
+- **Chosen time.** A wall-clock time is interpreted in the workspace zone: 09:00 before and after the 25 October 2026 change map to different instants; a repeated hour means its first occurrence; a time that does not exist is refused; past times and more than 60 days ahead are refused. A scheduled message is a pending due row and is not claimed early.
+- **Roles and isolation.** A representative can request but not approve; a read-only member neither; another workspace gets 404 on every action, and a worker acting for another tenant cannot see the message.
+
+**Limitations:**
+
+- Reconciliation relies on searching the mailbox by message ID. If Gmail's search lags or behaves differently from the fake, more sends would end as "unknown" for a person to settle; none would be resent.
+- Rate limiting is per mailbox. There is no per-recipient-domain pacing.
+- A domain-wide suppression is not serialised against an in-flight final check (see `outreach-policy.md`).
+- Events are written to the outbox but nothing delivers them yet (phase 10).
+- A send that fails or is blocked returns the draft for re-approval; there is no one-click retry by design.

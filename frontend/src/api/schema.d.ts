@@ -645,6 +645,63 @@ export interface paths {
         patch: operations["updateEmailDraft"];
         trace?: never;
     };
+    "/api/v1/email-drafts/{draft_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Draft
+         * @description Approve exactly this recipient, subject, text and sender. Any later change withdraws the approval.
+         */
+        post: operations["approveEmailDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/email-drafts/{draft_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Draft
+         * @description Ask for one approved message to be sent, now or at a chosen time. Asking twice does not send twice.
+         */
+        post: operations["sendEmailDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/email-sending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sending Status */
+        get: operations["getEmailSendingStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/email-suppressions": {
         parameters: {
             query?: never;
@@ -1868,6 +1925,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/send-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Send Intents
+         * @description Messages waiting to go, and those a person has to look at.
+         */
+        get: operations["listSendIntents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/send-intents/{intent_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Send
+         * @description Stop a message that has not started sending.
+         */
+        post: operations["cancelSendIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/send-intents/{intent_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Send
+         * @description Record what a person found for a send whose outcome is unknown, or acknowledge one that failed.
+         */
+        post: operations["resolveSendIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shortlists": {
         parameters: {
             query?: never;
@@ -2200,6 +2317,14 @@ export interface components {
             name: string;
             /** Purpose */
             purpose: string;
+        };
+        /** ApproveDraft */
+        ApproveDraft: {
+            /**
+             * Review Note
+             * @description Required when the rules ask for a person to review this recipient
+             */
+            review_note?: string | null;
         };
         /** AssessmentEdit */
         AssessmentEdit: {
@@ -3355,6 +3480,10 @@ export interface components {
             lead_id: string | null;
             /** Mailbox Id */
             mailbox_id: string | null;
+            /** Review Note */
+            review_note?: string | null;
+            /** @description The latest send request for this draft, if any */
+            send?: components["schemas"]["SendIntentOut"] | null;
             /**
              * Status
              * @enum {string}
@@ -4690,6 +4819,16 @@ export interface components {
             /** Note */
             note: string;
         };
+        /** ResolveSend */
+        ResolveSend: {
+            /** Note */
+            note: string;
+            /**
+             * Sent
+             * @description Whether the message is in the mailbox's Sent folder
+             */
+            sent: boolean;
+        };
         /** RestrictionIn */
         RestrictionIn: {
             /**
@@ -4922,6 +5061,61 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** SendDraft */
+        SendDraft: {
+            /**
+             * Scheduled Local
+             * @description Wall-clock time in the workspace time zone. Omit to send as soon as possible.
+             */
+            scheduled_local?: string | null;
+        };
+        /** SendIntentOut */
+        SendIntentOut: {
+            /** Accepted At */
+            accepted_at: string | null;
+            /**
+             * Delivery Evidence
+             * @description What is known after the provider accepted it. 'none' is not a confirmation of delivery.
+             * @enum {string}
+             */
+            delivery_evidence: "none" | "bounced" | "replied";
+            /** Dispatched At */
+            dispatched_at: string | null;
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            /** Draft Version */
+            draft_version: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Needs Attention */
+            needs_attention: boolean;
+            /**
+             * Scheduled For
+             * Format: date-time
+             */
+            scheduled_for: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "claimed" | "dispatching" | "provider_accepted" | "failed" | "cancelled" | "unknown" | "blocked" | "simulated";
+            /** State Reason */
+            state_reason: string | null;
+            /** Subject */
+            subject?: string | null;
+            /** To Address */
+            to_address: string;
+        };
         /** SenderIdentity */
         SenderIdentity: {
             /**
@@ -4929,6 +5123,24 @@ export interface components {
              * @description Legal name and contact details shown in every outgoing message
              */
             sender_identity: string;
+        };
+        /** SendingStatus */
+        SendingStatus: {
+            /** Daily Limit */
+            daily_limit: number | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "off" | "dry_run" | "live";
+            /** Needs Attention */
+            needs_attention: number;
+            /** Oldest Waiting Seconds */
+            oldest_waiting_seconds: number;
+            /** Sent Last 24H */
+            sent_last_24h: number;
+            /** Waiting */
+            waiting: number;
         };
         /** SessionOut */
         SessionOut: {
@@ -8204,6 +8416,186 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DraftOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    approveEmailDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveDraft"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    sendEmailDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendDraft"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendIntentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getEmailSendingStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendingStatus"];
                 };
             };
             /** @description Unauthorized */
@@ -12981,6 +13373,184 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listSendIntents: {
+        parameters: {
+            query?: {
+                needs_attention?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendIntentOut"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cancelSendIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendIntentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resolveSendIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveSend"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendIntentOut"];
+                };
             };
             /** @description Unauthorized */
             401: {

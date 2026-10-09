@@ -74,6 +74,8 @@ Only the organisation that owns the Google Cloud project may connect a mailbox. 
 | `GMAIL_PUSH_AUDIENCE`, `GMAIL_PUSH_SERVICE_ACCOUNT` | Audience and service account expected on the signed push request |
 | `MAILBOX_RECONCILE_MINUTES` | Timed check that recovers lost notifications (default 15) |
 | `EXTERNAL_GMAIL_ENABLED` | Leave `false`. External Gmail is not implemented (CRM-114) |
+| `EMAIL_DISPATCH` | `off` (default): send requests are refused. `dry_run`: every check runs and nothing is sent. `live`: approved messages are sent |
+| `SEND_LEASE_SECONDS`, `SEND_SCHEDULE_MAX_DAYS` | How long a worker may hold a send (default 90 s); how far ahead a message may be scheduled (default 60 days) |
 
 Steps for the owner (U-02):
 
@@ -84,3 +86,13 @@ Steps for the owner (U-02):
 5. Set the variables above, restart, and connect the mailbox under Integrations. The mailbox stays marked "not yet confirmed against a real mailbox" until the live gate is recorded.
 
 The refresh token is encrypted with the same keys as provider credentials. Attachments are never downloaded.
+
+### Sending limits
+
+Each mailbox has a daily limit (default 50) and a minimum gap between messages (default 30 seconds). These are cautious product defaults stored on the mailbox row, not Google's own limits, which must be checked for the account before raising them. A message over the limit waits in the database and is sent when the limit allows.
+
+### First live send (not yet done)
+
+1. Complete the Gmail steps above and the outreach-rule approval in the Email page.
+2. Set `EMAIL_DISPATCH=dry_run`, send one message to an address you control, and confirm it ends as "Dry run finished".
+3. Set `EMAIL_DISPATCH=live`, send the same message, reply to it, and confirm the reply appears on the prospect. Record the result in `docs/test-evidence.md`.

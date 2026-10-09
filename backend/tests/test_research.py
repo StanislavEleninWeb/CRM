@@ -6,6 +6,7 @@ from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -818,9 +819,9 @@ def test_a_scheduled_configuration_is_a_due_row_not_a_delayed_task(
     assert len(runs) == 1 and runs[0]["trigger"] == "schedule" and runs[0]["status"] == "queued"
     with migrator_engine.connect() as conn:
         again = conn.execute(text("SELECT status, due_at FROM due_jobs WHERE kind = 'research.schedule'")).one()
-        assert again.status == "pending" and again.due_at > datetime.now(UTC) + timedelta(
-            hours=1
-        )  # tomorrow, stored in the database
+        # The next 06:00 in the tenant's zone, stored in the database. (It may be minutes away.)
+        assert again.status == "pending" and again.due_at > datetime.now(UTC)
+        assert again.due_at.astimezone(ZoneInfo("Europe/Sofia")).strftime("%H:%M") == "06:00"
     # The run itself is also a due row; executing it advances the run.
     job = next(j for j in due.claim_due(10) if j["kind"] == "research.run")
     assert due.run_claimed(job) == "done"

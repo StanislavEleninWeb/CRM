@@ -7,9 +7,9 @@ Resume from here after a context reset. Do not rerun completed phases.
 | Field | Value |
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
-| Branch | `build/core`, pushed; pull request StanislavEleninWeb/CRM#2 |
-| Last completed phase | 08 (release A complete; release B in progress) |
-| Next action | Phase 09: approvals bound to content, send intents on due rows, reconciliation of ambiguous sends |
+| Branch | `build/core`; pull request StanislavEleninWeb/CRM#2 holds phases 00–08 (first commit); later commits are local until the owner asks for a push |
+| Last completed phase | 09 (releases A and B implemented; B live gates blocked) |
+| Next action | Phase 10: scoped API keys, idempotency, signed webhooks from the outbox, Hermes examples |
 
 ## Phases
 
@@ -24,7 +24,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 06 Provider connections and usage | DONE | see `git log` (`Phase 06`) | Only local test adapters exist; no real provider has been contacted |
 | 07 AI research | DONE except refresh mode | see `git log` (`Phase 07`) | Synthetic runs only. Live research BLOCKED (U-03, U-04). Open: refresh-existing mode (CRM-074), multi-page inspection |
 | 08 Internal Gmail and eligibility | DONE | see `git log` (`Phase 08`) | Stand-ins only. Live Gmail BLOCKED (U-02); live unsolicited email BLOCKED (U-06). Nothing can be sent yet |
-| 09 Reliable manual sends | TODO | — | |
+| 09 Reliable manual sends | DONE | see `git log` (`Phase 09`) | Sending is `off` by default. Verified with a fake mailbox only; no email has ever been sent |
 | 10 Public API, webhooks, Hermes | TODO | — | |
 | 11 Subscriptions and entitlements | TODO | — | |
 | 12 Reporting and operational controls | TODO | — | |
@@ -81,3 +81,6 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - After a real import the local development database holds real prospect data. It lives only in the local Docker volume; `make reset` removes it.
 - Email: eligibility is decided only by `app.modules.email.eligibility.evaluate`; anything that sends must call it at send time, not rely on an earlier preview. Mailbox HTML is sanitised on the server and the frontend still shows plain text only.
 - A Gmail notification is a trigger, never data: the cursor moves only after a page of history has been stored and committed.
+- A send is a `send_intents` row with explicit states; `app.modules.email.dispatch` is the only code that calls the provider's send. A handler that does anything slow commits first, so no lock is held across a network call.
+- `dispatching` or `unknown` is never returned to `queued` by code. Only a person's recorded decision ends an unknown send.
+- Events are written with `app.core.outbox.emit` in the same transaction as the change.

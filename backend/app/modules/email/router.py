@@ -13,6 +13,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from app.core import outbox
 from app.core.config import get_settings
 from app.core.db import RlsContext, session_scope
 from app.core.deps import TenantContext, get_redis, tenant_with
@@ -21,9 +22,9 @@ from app.core.normalize import normalize_email
 from app.core.pagination import Page, PageParams, page_params
 from app.core.secrets import get_keyring
 from app.core.security import constant_time_equal, new_token, set_cookie
-from app.core.time import utcnow
+from app.core.time import local_to_utc, utcnow
 from app.modules.crm.common import ValidationFailed, execute, exists, log_activity, many, one, scalar
-from app.modules.email import eligibility, sync
+from app.modules.email import dispatch, eligibility, sync
 from app.modules.email.oauth import GoogleAuth, ensure_tenant_may_connect, get_google_auth
 from app.modules.identity.audit import record_audit
 from app.modules.identity.permissions import Permission
@@ -136,8 +137,67 @@ class DraftOut(BaseModel):
     status: Literal["draft", "approved", "queued", "sent", "cancelled"]
     approved_version: int | None
     approved_at: datetime | None
+    review_note: str | None = None
     created_at: datetime
     eligibility: EligibilityOut
+    send: "SendIntentOut | None" = Field(default=None, description="The latest send request for this draft, if any")
+
+
+class SendIntentOut(BaseModel):
+    id: UUID
+    draft_id: UUID
+    draft_version: int
+    to_address: str
+    kind: str
+    state: Literal[
+        "queued",
+        "claimed",
+        "dispatching",
+        "provider_accepted",
+        "failed",
+        "cancelled",
+        "unknown",
+        "blocked",
+        "simulated",
+    ]
+    state_reason: str | None
+    scheduled_for: datetime
+    dispatched_at: datetime | None
+    accepted_at: datetime | None
+    delivery_evidence: Literal["none", "bounced", "replied"] = Field(
+        description="What is known after the provider accepted it. 'none' is not a confirmation of delivery."
+    )
+    dry_run: bool
+    needs_attention: bool
+    subject: str | None = None
+
+
+class ApproveDraft(BaseModel):
+    review_note: str | None = Field(
+        default=None, max_length=1000, description="Required when the rules ask for a person to review this recipient"
+    )
+
+
+class SendDraft(BaseModel):
+    scheduled_local: str | None = Field(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$",
+        description="Wall-clock time in the workspace time zone. Omit to send as soon as possible.",
+    )
+
+
+class ResolveSend(BaseModel):
+    sent: bool = Field(description="Whether the message is in the mailbox's Sent folder")
+    note: str = Field(min_length=10, max_length=1000)
+
+
+class SendingStatus(BaseModel):
+    mode: Literal["off", "dry_run", "live"]
+    waiting: int
+    needs_attention: int
+    oldest_waiting_seconds: int
+    sent_last_24h: int
+    daily_limit: int | None
 
 
 class OutreachPolicyOut(BaseModel):
@@ -585,35 +645,9 @@ def link_thread(thread_id: UUID, body: LinkThread, ctx: TenantContext = tenant_w
 # --- drafts ----------------------------------------------------------------------------------
 
 
-def unsubscribe_url(tenant_id: UUID, address: str) -> str:
-    from app.modules.email.unsubscribe import make_token
-
-    return f"{get_settings().public_base_url.rstrip('/')}/api/v1/unsubscribe/{make_token(tenant_id, address)}"
-
-
 def rendered(ctx: TenantContext, draft: Any, mailbox: Any | None) -> tuple[str, eligibility.Decision]:
     """The final body and the eligibility decision for a draft as it stands now."""
-    policy = eligibility.current_policy(ctx.db, ctx.tenant_id)
-    identity = scalar(ctx, "SELECT sender_identity FROM tenants WHERE id = :tenant_id")
-    foot = eligibility.footer(
-        dict(policy["rules"]) if policy else {},
-        kind=draft["kind"],
-        sender_identity=identity,
-        unsubscribe_url=unsubscribe_url(ctx.tenant_id, draft["to_address"]),
-    )
-    body = eligibility.render(draft["body_text"], foot)
-    decision = eligibility.evaluate(
-        ctx.db,
-        ctx.tenant_id,
-        to_address=draft["to_address"],
-        kind=draft["kind"],
-        subject=draft["subject"],
-        rendered_body=body,
-        sender_address=mailbox["email_address"] if mailbox and mailbox["status"] != "revoked" else None,
-        company_id=draft["company_id"],
-        thread_id=draft["thread_id"],
-    )
-    return body, decision
+    return dispatch.render(ctx.db, ctx.tenant_id, draft, mailbox)
 
 
 def _draft(ctx: TenantContext, draft_id: UUID) -> DraftOut:
@@ -624,8 +658,14 @@ def _draft(ctx: TenantContext, draft_id: UUID) -> DraftOut:
         "Draft not found.",
     )
     body, decision = rendered(ctx, draft, active_mailbox(ctx))
+    latest = many(
+        ctx,
+        f"SELECT {INTENT_COLUMNS} FROM send_intents i WHERE i.tenant_id = :tenant_id AND i.draft_id = :d ORDER BY i.created_at DESC LIMIT 1",
+        {"d": draft_id},
+    )
     return DraftOut(
-        **{k: draft[k] for k in DraftOut.model_fields if k != "eligibility"},
+        **{k: draft[k] for k in DraftOut.model_fields if k not in ("eligibility", "send")},
+        send=_intent(latest[0]) if latest else None,
         eligibility=EligibilityOut(
             outcome=decision.outcome,
             reasons=decision.reasons,
@@ -766,6 +806,308 @@ def discard_draft(draft_id: UUID, ctx: TenantContext = DRAFT) -> None:
         "UPDATE email_drafts SET status = 'cancelled' WHERE tenant_id = :tenant_id AND id = :id AND status IN ('draft', 'approved') RETURNING id",
         {"id": draft_id},
         "Draft not found or already sent.",
+    )
+
+
+# --- approving and sending -------------------------------------------------------------------
+
+INTENT_COLUMNS = (
+    "i.id, i.draft_id, i.draft_version, i.to_address::text AS to_address, i.kind, i.state, i.state_reason, i.scheduled_for, "
+    "i.dispatched_at, i.accepted_at, i.delivery_evidence, i.dry_run"
+)
+ATTENTION = ("unknown", "failed", "blocked")
+APPROVE = tenant_with(Permission.OUTREACH_APPROVE)
+SEND = tenant_with(Permission.OUTREACH_SEND)
+
+
+def _intent(row: Any) -> SendIntentOut:
+    return SendIntentOut(**dict(row), needs_attention=row["state"] in ATTENTION)
+
+
+def _locked_draft(ctx: TenantContext, draft_id: UUID) -> Any:
+    return one(
+        ctx,
+        "SELECT * FROM email_drafts WHERE tenant_id = :tenant_id AND id = :id FOR UPDATE",
+        {"id": draft_id},
+        "Draft not found.",
+    )
+
+
+@router.post(
+    "/email-drafts/{draft_id}/approve", response_model=DraftOut, operation_id="approveEmailDraft", tags=["email"]
+)
+def approve_draft(draft_id: UUID, body: ApproveDraft, ctx: TenantContext = APPROVE) -> DraftOut:
+    """Approve exactly this recipient, subject, text and sender. Any later change withdraws the approval."""
+    draft = _locked_draft(ctx, draft_id)
+    if draft["status"] not in ("draft", "approved"):
+        raise ConflictError("This message is already on its way or finished.")
+    mailbox = active_mailbox(ctx)
+    _, decision = dispatch.render(ctx.db, ctx.tenant_id, draft, mailbox, "request")
+    eligibility.record(
+        ctx.db,
+        ctx.tenant_id,
+        decision,
+        to_address=draft["to_address"],
+        kind=draft["kind"],
+        stage="request",
+        draft_id=draft_id,
+        decided_by=ctx.user_id,
+    )
+    if decision.outcome == "block":
+        ctx.db.commit()  # keep the record of the refused attempt
+        raise ConflictError(f"This message may not be sent: {dispatch.refusal(decision)}")
+    note = (body.review_note or "").strip()
+    review_codes = sorted({r["code"] for r in decision.reasons if r["level"] == "review"})
+    if review_codes and len(note) < 10:
+        raise ValidationFailed(
+            f"The rules ask for a person to review this message: {dispatch.refusal(decision)} Say what you checked."
+        )
+    execute(
+        ctx,
+        "UPDATE email_drafts SET status = 'approved', approved_version = version, approved_content_hash = :h, approved_by = :u, "
+        "approved_at = now(), review_note = :n, reviewed_codes = :codes WHERE tenant_id = :tenant_id AND id = :id",
+        {"h": decision.content_hash, "u": ctx.user_id, "n": note or None, "codes": review_codes, "id": draft_id},
+    )
+    record_audit(
+        ctx.db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="email.approved",
+        target_type="email_draft",
+        target_id=str(draft_id),
+        data={"version": draft["version"], "policy_version": decision.policy_version, "reviewed": review_codes},
+    )
+    return _draft(ctx, draft_id)
+
+
+@router.post(
+    "/email-drafts/{draft_id}/send", response_model=SendIntentOut, operation_id="sendEmailDraft", tags=["email"]
+)
+def send_draft(draft_id: UUID, body: SendDraft, ctx: TenantContext = SEND) -> SendIntentOut:
+    """Ask for one approved message to be sent, now or at a chosen time. Asking twice does not send twice."""
+    settings = get_settings()
+    draft = _locked_draft(ctx, draft_id)
+    existing = many(
+        ctx,
+        f"SELECT {INTENT_COLUMNS} FROM send_intents i WHERE i.tenant_id = :tenant_id AND i.draft_id = :d AND i.draft_version = :v",
+        {"d": draft_id, "v": draft["version"]},
+    )
+    if existing:
+        return _intent(existing[0])
+    if settings.email_dispatch == "off":
+        raise ConflictError("Sending is switched off on this installation. The draft is saved.")
+    if draft["status"] != "approved" or draft["approved_version"] != draft["version"]:
+        raise ConflictError("This version of the message has not been approved.")
+    mailbox = active_mailbox(ctx)
+    if mailbox is None:
+        raise ConflictError("No mailbox is connected.")
+    _, decision = dispatch.render(ctx.db, ctx.tenant_id, draft, mailbox, "request")
+    eligibility.record(
+        ctx.db,
+        ctx.tenant_id,
+        decision,
+        to_address=draft["to_address"],
+        kind=draft["kind"],
+        stage="request",
+        draft_id=draft_id,
+        decided_by=ctx.user_id,
+    )
+    if not dispatch.permitted(draft, decision):
+        ctx.db.commit()
+        raise ConflictError(f"This message may not be sent: {dispatch.refusal(decision)}")
+    if decision.content_hash != draft["approved_content_hash"]:
+        raise ConflictError("The outreach rules or sender details changed after approval. Approve the message again.")
+    when = utcnow()
+    if body.scheduled_local:
+        zone = scalar(ctx, "SELECT timezone FROM tenants WHERE id = :tenant_id")
+        try:
+            when = local_to_utc(datetime.fromisoformat(body.scheduled_local), zone)
+        except ValueError as exc:
+            raise ValidationFailed(f"Choose another time: {exc}.") from exc
+        if when <= utcnow():
+            raise ValidationFailed("Choose a time in the future.")
+        if when > utcnow() + timedelta(days=settings.send_schedule_max_days):
+            raise ValidationFailed(f"A message can be scheduled at most {settings.send_schedule_max_days} days ahead.")
+    domain = mailbox["email_address"].split("@", 1)[1]
+    intent_id = scalar(
+        ctx,
+        "INSERT INTO send_intents (tenant_id, draft_id, mailbox_id, draft_version, content_hash, to_address, kind, scheduled_for, "
+        "rfc_message_id, requested_by, dry_run) VALUES (:tenant_id, :d, :m, :v, :h, :to, :k, :w, :rfc, :u, :dry) RETURNING id",
+        {
+            "d": draft_id,
+            "m": mailbox["id"],
+            "v": draft["version"],
+            "h": decision.content_hash,
+            "to": draft["to_address"],
+            "k": draft["kind"],
+            "w": when,
+            "rfc": f"<{uuid4()}@{domain}>",
+            "u": ctx.user_id,
+            "dry": settings.email_dispatch != "live",
+        },
+    )
+    execute(
+        ctx, "UPDATE email_drafts SET status = 'queued' WHERE tenant_id = :tenant_id AND id = :id", {"id": draft_id}
+    )
+    # The schedule lives in the database, in the same transaction as the request.
+    schedule(ctx.db, ctx.tenant_id, kind=dispatch.DUE_KIND, unique_key=str(intent_id), due_at=when, ref_id=intent_id)
+    outbox.emit(
+        ctx.db,
+        ctx.tenant_id,
+        "email.send.queued",
+        subject_type="send_intent",
+        subject_id=intent_id,
+        payload={"draft_id": draft_id, "scheduled_for": when},
+    )
+    record_audit(
+        ctx.db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="email.send_requested",
+        target_type="send_intent",
+        target_id=str(intent_id),
+        data={"draft_id": str(draft_id), "version": draft["version"], "dry_run": settings.email_dispatch != "live"},
+    )
+    return _intent(
+        one(
+            ctx,
+            f"SELECT {INTENT_COLUMNS} FROM send_intents i WHERE i.tenant_id = :tenant_id AND i.id = :id",
+            {"id": intent_id},
+            "Not found.",
+        )
+    )
+
+
+@router.get("/send-intents", response_model=list[SendIntentOut], operation_id="listSendIntents", tags=["email"])
+def list_send_intents(ctx: TenantContext = READ, needs_attention: bool = False) -> list[SendIntentOut]:
+    """Messages waiting to go, and those a person has to look at."""
+    states = ATTENTION if needs_attention else (*ATTENTION, "queued", "claimed", "dispatching")
+    rows = many(
+        ctx,
+        f"SELECT {INTENT_COLUMNS}, d.subject FROM send_intents i JOIN email_drafts d ON d.tenant_id = i.tenant_id AND d.id = i.draft_id "
+        "WHERE i.tenant_id = :tenant_id AND i.state = ANY(:states) AND i.resolved_at IS NULL ORDER BY i.scheduled_for LIMIT 100",
+        {"states": list(states)},
+    )
+    return [_intent(r) for r in rows]
+
+
+@router.post(
+    "/send-intents/{intent_id}/cancel", response_model=SendIntentOut, operation_id="cancelSendIntent", tags=["email"]
+)
+def cancel_send(intent_id: UUID, ctx: TenantContext = SEND) -> SendIntentOut:
+    """Stop a message that has not started sending."""
+    one(
+        ctx,
+        "SELECT id FROM send_intents WHERE tenant_id = :tenant_id AND id = :id",
+        {"id": intent_id},
+        "Send request not found.",
+    )
+    stopped = dispatch.cancel_waiting(ctx.db, ctx.tenant_id, "id = :id", {"id": intent_id}, "Cancelled before sending.")
+    if not stopped:
+        raise ConflictError("This message is already being sent or has finished. It cannot be called back.")
+    execute(
+        ctx,
+        "UPDATE send_intents SET cancelled_by = :u WHERE tenant_id = :tenant_id AND id = :id",
+        {"u": ctx.user_id, "id": intent_id},
+    )
+    record_audit(
+        ctx.db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="email.send_cancelled",
+        target_type="send_intent",
+        target_id=str(intent_id),
+    )
+    return _intent(
+        one(
+            ctx,
+            f"SELECT {INTENT_COLUMNS} FROM send_intents i WHERE i.tenant_id = :tenant_id AND i.id = :id",
+            {"id": intent_id},
+            "Not found.",
+        )
+    )
+
+
+@router.post(
+    "/send-intents/{intent_id}/resolve", response_model=SendIntentOut, operation_id="resolveSendIntent", tags=["email"]
+)
+def resolve_send(intent_id: UUID, body: ResolveSend, ctx: TenantContext = APPROVE) -> SendIntentOut:
+    """Record what a person found for a send whose outcome is unknown, or acknowledge one that failed."""
+    intent = one(
+        ctx,
+        "SELECT * FROM send_intents WHERE tenant_id = :tenant_id AND id = :id FOR UPDATE",
+        {"id": intent_id},
+        "Send request not found.",
+    )
+    if intent["state"] not in ATTENTION or intent["resolved_at"] is not None:
+        raise ConflictError("There is nothing to decide for this message.")
+    if intent["state"] == "unknown":
+        if body.sent:
+            execute(
+                ctx,
+                "UPDATE send_intents SET state = 'provider_accepted', accepted_at = now(), state_reason = 'Confirmed in the mailbox by a person.' "
+                "WHERE tenant_id = :tenant_id AND id = :id",
+                {"id": intent_id},
+            )
+            execute(
+                ctx,
+                "UPDATE email_drafts SET status = 'sent' WHERE tenant_id = :tenant_id AND id = :d",
+                {"d": intent["draft_id"]},
+            )
+        else:
+            # It did not go. The draft becomes editable again; sending it needs a new approval and a new request.
+            execute(
+                ctx,
+                "UPDATE send_intents SET state = 'failed', state_reason = 'A person confirmed it was not sent.' WHERE tenant_id = :tenant_id AND id = :id",
+                {"id": intent_id},
+            )
+            dispatch.release_draft(ctx.db, ctx.tenant_id, intent["draft_id"])
+    elif body.sent:
+        raise ConflictError("This message was not sent; it cannot be marked as sent.")
+    execute(
+        ctx,
+        "UPDATE send_intents SET resolved_by = :u, resolved_at = now(), resolution_note = :n WHERE tenant_id = :tenant_id AND id = :id",
+        {"u": ctx.user_id, "n": body.note, "id": intent_id},
+    )
+    record_audit(
+        ctx.db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="email.send_resolved",
+        target_type="send_intent",
+        target_id=str(intent_id),
+        data={"was": intent["state"], "sent": body.sent},
+    )
+    return _intent(
+        one(
+            ctx,
+            f"SELECT {INTENT_COLUMNS} FROM send_intents i WHERE i.tenant_id = :tenant_id AND i.id = :id",
+            {"id": intent_id},
+            "Not found.",
+        )
+    )
+
+
+@router.get("/email-sending", response_model=SendingStatus, operation_id="getEmailSendingStatus", tags=["email"])
+def sending_status(ctx: TenantContext = READ) -> SendingStatus:
+    row = one(
+        ctx,
+        "SELECT count(*) FILTER (WHERE state IN ('queued', 'claimed', 'dispatching')) AS waiting, "
+        "count(*) FILTER (WHERE state IN ('unknown', 'failed', 'blocked') AND resolved_at IS NULL) AS needs_attention, "
+        "COALESCE(EXTRACT(EPOCH FROM now() - min(scheduled_for) FILTER (WHERE state = 'queued' AND scheduled_for <= now())), 0)::int AS oldest, "
+        "count(*) FILTER (WHERE NOT dry_run AND dispatched_at > now() - interval '24 hours' "
+        "AND state IN ('dispatching', 'provider_accepted', 'unknown')) AS sent FROM send_intents WHERE tenant_id = :tenant_id",
+        {},
+        "Not found.",
+    )
+    mailbox = active_mailbox(ctx)
+    return SendingStatus(
+        mode=get_settings().email_dispatch,
+        waiting=row["waiting"],
+        needs_attention=row["needs_attention"],
+        oldest_waiting_seconds=row["oldest"],
+        sent_last_24h=row["sent"],
+        daily_limit=mailbox["daily_send_limit"] if mailbox else None,
     )
 
 
@@ -967,6 +1309,8 @@ def suppress(
     note: str | None,
     created_by: UUID | None,
 ) -> None:
+    if scope == "address":
+        eligibility.lock_recipient(db, tenant_id, value)
     db.execute(
         text(
             "INSERT INTO email_suppressions (tenant_id, scope, value, reason, source, note, created_by) VALUES (:t, :sc, :v, :r, :src, :n, :u) "
@@ -976,12 +1320,7 @@ def suppress(
     )
     # Anything still waiting to go to this recipient is stopped now, not at dispatch time.
     condition = "to_address = :v" if scope == "address" else "split_part(to_address::text, '@', 2) = :v"
-    db.execute(
-        text(
-            f"UPDATE send_intents SET state = 'cancelled', state_reason = 'the recipient was suppressed' WHERE tenant_id = :t AND state = 'queued' AND {condition}"
-        ),
-        {"t": tenant_id, "v": value},
-    )
+    dispatch.cancel_waiting(db, tenant_id, condition, {"v": value}, "The recipient was added to the do-not-email list.")
 
 
 @router.post(

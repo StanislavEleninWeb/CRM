@@ -52,6 +52,17 @@ A free-mail domain is not evidence of legal form. Unknown facts route to review;
 - A permanent delivery failure suppresses the address; a temporary one does not. Suppressions cannot be deleted, only lifted with a note, and re-importing a list does not undo them.
 - A follow-up the prospect asked for on a call is allowed only for the address and scope recorded with that call.
 
+## Sending (phase 09)
+
+- A message is approved as an exact recipient, subject, final text and sender. Changing any of them, or the label or sender identification in the rules, withdraws the approval.
+- "Needs review" can be approved only with a note saying what was checked, and only for the reasons shown at that moment. A block cannot be approved.
+- The rules are evaluated when a message is approved, when sending is requested, and again immediately before it is handed to the mailbox provider. Every evaluation is stored with the policy version.
+- **The boundary.** The last evaluation and anything that would stop the message (an opt-out, a suppression, a reply, a permanent bounce) are serialised per recipient. Once the last evaluation has committed, the message is on its way; an opt-out arriving after that moment is recorded and applies to everything later, but cannot recall that message. A domain-wide suppression is not serialised in this way and takes effect at the next evaluation.
+- A reply from the recipient cancels unsolicited messages still waiting for them. It does not cancel a reply the user is writing in that conversation.
+- "Accepted by the mailbox provider" is not delivery. A reply or a bounce is the only delivery evidence recorded. Gmail does not report complaints, so none are claimed.
+- Unsolicited messages carry `List-Unsubscribe` and one-click headers; replies and requested follow-ups do not.
+- Phone follow-ups are tasks. They never send anything.
+
 ## Open items before live unsolicited email
 
 1. Confirm the current text of Article 6 and how sole traders are treated.

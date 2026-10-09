@@ -139,7 +139,7 @@ function DraftEditor({ draft, onChanged }: { draft: Draft; onChanged: () => Prom
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body_text);
   const ids = { to: useId(), subject: useId(), body: useId() };
-  const editable = can("outreach.draft") && draft.status === "draft";
+  const editable = can("outreach.draft") && (draft.status === "draft" || draft.status === "approved");
   const dirty = to !== draft.to_address || subject !== draft.subject || body !== draft.body_text;
   const reasons = draft.eligibility.reasons as Reason[];
 
@@ -222,8 +222,126 @@ function DraftEditor({ draft, onChanged }: { draft: Draft; onChanged: () => Prom
         <summary>Preview of what would be sent</summary>
         <pre className="email-preview">{draft.eligibility.rendered_body}</pre>
       </details>
-      <p className="muted">Sending from the application is not switched on yet. Drafts are saved for review.</p>
+      <SendControls draft={draft} dirty={dirty} onChanged={onChanged} />
     </article>
+  );
+}
+
+const SEND_STATE_LABELS: Record<string, string> = {
+  queued: "Waiting to be sent",
+  claimed: "Being sent",
+  dispatching: "Being sent",
+  provider_accepted: "Accepted by the mailbox provider",
+  unknown: "Not known whether it was sent",
+  failed: "Not sent",
+  blocked: "Stopped before sending",
+  cancelled: "Cancelled",
+  simulated: "Dry run finished: nothing was sent",
+};
+
+/** Approve, send now or at a chosen time, and cancel. Each is a separate, explicit step. */
+function SendControls({ draft, dirty, onChanged }: { draft: Draft; dirty: boolean; onChanged: () => Promise<void> }) {
+  const { can, me } = useAuth();
+  const sending = useTenantQuery(["email-sending"], () => unwrap(api.GET("/api/v1/email-sending")));
+  const [note, setNote] = useState("");
+  const [when, setWhen] = useState("");
+  const ids = { note: useId(), when: useId() };
+  const path = { params: { path: { draft_id: draft.id } } };
+  const approve = useMutation({
+    mutationFn: () => unwrap(api.POST("/api/v1/email-drafts/{draft_id}/approve", { ...path, body: { review_note: note || null } })),
+    onSuccess: onChanged,
+  });
+  const send = useMutation({
+    mutationFn: (scheduledLocal: string | null) =>
+      unwrap(api.POST("/api/v1/email-drafts/{draft_id}/send", { ...path, body: { scheduled_local: scheduledLocal } })),
+    onSuccess: onChanged,
+  });
+  const cancel = useMutation({
+    mutationFn: (intentId: string) =>
+      unwrap(api.POST("/api/v1/send-intents/{intent_id}/cancel", { params: { path: { intent_id: intentId } } })),
+    onSuccess: onChanged,
+  });
+  const mode = sending.data?.mode;
+  const latest = draft.send;
+  const outcome = draft.eligibility.outcome;
+  const zone = me.active_tenant?.timezone;
+
+  return (
+    <div className="stack">
+      {latest ? (
+        <p className={latest.needs_attention ? "notice notice-warn" : "muted"} role="status">
+          {SEND_STATE_LABELS[latest.state] ?? latest.state}
+          {latest.state === "queued" ? ` · due ${formatDateTime(latest.scheduled_for, zone)}` : ""}
+          {latest.state === "provider_accepted"
+            ? ` ${formatDateTime(latest.accepted_at, zone)}. ${
+                latest.delivery_evidence === "replied"
+                  ? "They replied."
+                  : latest.delivery_evidence === "bounced"
+                    ? "It was returned as undeliverable."
+                    : "This is not a confirmation that it was delivered or read."
+              }`
+            : ""}
+          {latest.state_reason && latest.state !== "provider_accepted" ? ` — ${latest.state_reason}` : ""}
+          {latest.dry_run && latest.state !== "simulated" ? " (dry run)" : ""}
+        </p>
+      ) : null}
+      {mode === "off" ? <p className="muted">Sending is switched off on this installation. Drafts can be written and approved.</p> : null}
+      {mode === "dry_run" ? (
+        <p className="muted">Dry run: a send request runs every check and stops before the mailbox. Nothing is sent.</p>
+      ) : null}
+
+      {draft.status === "draft" && can("outreach.approve") ? (
+        <form
+          className="inline-form"
+          aria-label="Approve this message"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            approve.mutate();
+          }}
+        >
+          {outcome === "review" ? (
+            <div className="field">
+              <label htmlFor={ids.note}>What you checked about this recipient</label>
+              <input id={ids.note} value={note} onChange={(e) => setNote(e.target.value)} required minLength={10} maxLength={1000} />
+            </div>
+          ) : null}
+          <button type="submit" className="button" disabled={dirty || outcome === "block" || approve.isPending}>
+            Approve this version
+          </button>
+        </form>
+      ) : null}
+      {draft.status === "approved" ? (
+        <p className="muted">
+          Version {draft.approved_version} approved {formatDateTime(draft.approved_at, zone)}. Editing it withdraws the approval.
+        </p>
+      ) : null}
+      {draft.status === "approved" && can("outreach.send") && mode && mode !== "off" ? (
+        <form
+          className="inline-form"
+          aria-label="Send this message"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            send.mutate(when || null);
+          }}
+        >
+          <div className="field">
+            <label htmlFor={ids.when}>Send at ({zone ?? "workspace"} time; leave empty to send now)</label>
+            <input id={ids.when} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+          </div>
+          <button type="submit" className="button" disabled={dirty || send.isPending}>
+            {when ? "Schedule" : mode === "dry_run" ? "Run the dry run" : "Send now"}
+          </button>
+        </form>
+      ) : null}
+      {latest?.state === "queued" && can("outreach.send") ? (
+        <div className="row-actions">
+          <button type="button" className="button" disabled={cancel.isPending} onClick={() => cancel.mutate(latest.id)}>
+            Cancel sending
+          </button>
+        </div>
+      ) : null}
+      {[approve, send, cancel].map((mutation, index) => (mutation.isError ? <ErrorState key={index} error={mutation.error} /> : null))}
+    </div>
   );
 }
 

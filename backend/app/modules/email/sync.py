@@ -74,6 +74,10 @@ def get_provider() -> MailboxProvider:
     return GmailProvider()
 
 
+def get_tokens() -> TokenSource:
+    return _tokens
+
+
 def _acquire(tenant_id: UUID, mailbox_id: UUID) -> tuple[Any, UUID] | None:
     """Take the per-mailbox lease in a short transaction. Returns None when another sync holds it."""
     lease = uuid4()
@@ -359,6 +363,16 @@ def store_message(db: Session, tenant_id: UUID, mailbox: Any, raw: RawMessage) -
             ),
             {"t": tenant_id, "rfc": rfc_id, "id": inserted},
         )
+        # A message this application sent belongs to the prospect it was written for.
+        db.execute(
+            text(
+                "UPDATE email_threads th SET company_id = d.company_id, lead_id = d.lead_id, link_state = 'linked', link_note = NULL "
+                "FROM send_intents i JOIN email_drafts d ON d.tenant_id = i.tenant_id AND d.id = i.draft_id "
+                "WHERE th.tenant_id = :t AND th.id = :th AND i.tenant_id = :t AND i.rfc_message_id = :rfc "
+                "AND th.link_state IN ('unmatched', 'conflict') AND d.company_id IS NOT NULL"
+            ),
+            {"t": tenant_id, "th": thread["id"], "rfc": rfc_id},
+        )
         return 1
     _link_thread(db, tenant_id, thread, from_address)
     _inbound_effects(db, tenant_id, thread["id"], raw, classification, from_address)
@@ -427,6 +441,10 @@ def _inbound_effects(
         )
         permanent = mime.is_permanent_bounce(raw.text, raw.headers)
         for address in failed:
+            if permanent:
+                from app.modules.email import eligibility
+
+                eligibility.lock_recipient(db, tenant_id, address)
             db.execute(
                 text(
                     "UPDATE send_intents SET delivery_evidence = 'bounced' WHERE tenant_id = :t AND to_address = :a AND state = 'provider_accepted'"
@@ -445,12 +463,16 @@ def _inbound_effects(
     if classification not in ("reply", "message") or not from_address:
         return  # automatic replies change nothing; they wait for a person to look
     # A real reply stops any unsolicited message still waiting to go to this person.
-    db.execute(
-        text(
-            "UPDATE send_intents SET state = 'cancelled', state_reason = 'the recipient replied before this was sent' "
-            "WHERE tenant_id = :t AND to_address = :a AND kind = 'unsolicited' AND state = 'queued'"
-        ),
-        {"t": tenant_id, "a": from_address},
+    # An ordinary reply the user is writing in this conversation is not affected.
+    from app.modules.email import dispatch, eligibility
+
+    eligibility.lock_recipient(db, tenant_id, from_address)
+    dispatch.cancel_waiting(
+        db,
+        tenant_id,
+        "to_address = :a AND kind = 'unsolicited'",
+        {"a": from_address},
+        "The recipient replied before this was sent.",
     )
     db.execute(
         text(

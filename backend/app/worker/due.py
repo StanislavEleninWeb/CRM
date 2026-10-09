@@ -46,6 +46,9 @@ def _load_builtin_handlers() -> None:
 
     _handlers.setdefault("mailbox.sync", sync.sync_handler)
     _handlers.setdefault("mailbox.watch", sync.watch_handler)
+    from app.modules.email import dispatch
+
+    _handlers.setdefault(dispatch.DUE_KIND, dispatch.send_handler)
     _builtin_loaded = True
 
 
@@ -117,15 +120,18 @@ def run_claimed(job: dict[str, Any]) -> str:
             again_at = handler(db, UUID(str(job["tenant_id"])), job["ref_id"], job["payload"] or {})
             if again_at is None:
                 db.execute(
-                    text("UPDATE due_jobs SET status = 'done', finished_at = now(), lease_token = NULL WHERE id = :id"),
-                    {"id": job["id"]},
+                    text(
+                        "UPDATE due_jobs SET status = 'done', finished_at = now(), lease_token = NULL WHERE id = :id AND lease_token = :lease"
+                    ),
+                    {"id": job["id"], "lease": job["lease_token"]},
                 )
                 return "done"
             db.execute(
                 text(
-                    "UPDATE due_jobs SET status = 'pending', due_at = :d, lease_token = NULL, lease_expires_at = NULL, attempts = 0 WHERE id = :id"
+                    "UPDATE due_jobs SET status = 'pending', due_at = :d, lease_token = NULL, lease_expires_at = NULL, attempts = 0 "
+                    "WHERE id = :id AND lease_token = :lease"
                 ),
-                {"d": again_at, "id": job["id"]},
+                {"d": again_at, "id": job["id"], "lease": job["lease_token"]},
             )
             return "rescheduled"
     except Exception as exc:

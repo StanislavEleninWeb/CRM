@@ -23,9 +23,20 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Live research run | BLOCKED — provider, terms and budget (U-03, U-04) |
 | Gmail sync contract verified against a fake provider | PASS (fake mailbox and mocked HTTP transport) |
 | Live internal Gmail connection | BLOCKED — mailbox and project ownership (U-02) |
-| Email eligibility enforced at send time | NOT_STARTED — evaluated on every draft read (phase 08); the send path arrives in phase 09 |
+| Email eligibility enforced at approval, at the send request and immediately before dispatch | PASS (local) |
 | Live unsolicited email | BLOCKED — policy approval (U-06) |
-| Due-row dispatcher: single claim, crash recovery, no blind resend | NOT_STARTED |
+| Due-row dispatcher: single claim, crash recovery, no blind resend | PASS (local, PostgreSQL, eight concurrent workers, fake mailbox) |
+| No database lock or open transaction during the provider call | PASS (local) |
+
+### Phase B gate, by concern
+
+| Concern | Status | What it rests on |
+|---|---|---|
+| Software: research, mailbox sync, eligibility, dispatch | VERIFIED_LOCALLY | Automated tests against PostgreSQL with local stand-ins |
+| Provider: Gmail | IMPLEMENTED, not connected | No Google account has been used. Needs U-02 |
+| Provider: Google Places, AI model | IMPLEMENTED (Places contract only), not connected | Needs U-03, U-04 |
+| Policy: Bulgarian outreach rules | Draft, not approved | Needs qualified review and owner approval (U-06) |
+| Live test: one approved email sent and its reply tracked | NOT RUN — BLOCKED | Needs the three rows above. `EMAIL_DISPATCH` is `off` |
 
 ## Commercial core (phases 10–14)
 

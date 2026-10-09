@@ -89,10 +89,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-094 | Database due dispatcher | Two pollers claim each row once; crash recovery; no lock across network calls | TODO |
-| CRM-091 | Manual-send approvals | Edits invalidate approval | TODO |
-| CRM-092 | Suppression | Reply or opt-out before dispatch blocks | TODO |
-| CRM-093 | Reliable sends | Ambiguous outcomes reconciled, never blindly resent | TODO |
+| CRM-094 | Database due dispatcher | Two pollers claim each row once; crash recovery; no lock across network calls | DONE |
+| CRM-091 | Manual-send approvals | Edits invalidate approval | DONE |
+| CRM-092 | Suppression | Reply or opt-out before dispatch blocks | DONE |
+| CRM-093 | Reliable sends | Ambiguous outcomes reconciled, never blindly resent | DONE (fake mailbox; live send BLOCKED U-02, U-06) |
 
 ## Phase 10 — public API, webhooks, Hermes (P2, depends on 07, 09)
 

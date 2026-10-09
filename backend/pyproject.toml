@@ -34,6 +34,8 @@ dev = [
 package = false
 
 [tool.ruff]
+# The source tree is a read-only bind mount for the container user in CI; caches go elsewhere.
+cache-dir = "/tmp/ruff_cache"
 line-length = 120
 target-version = "py313"
 
@@ -51,6 +53,7 @@ extend-immutable-calls = ["app.core.deps.tenant_with", "fastapi.Depends", "fasta
 "migrations/**" = ["S608", "E501"]
 
 [tool.mypy]
+cache_dir = "/tmp/mypy_cache"
 python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy"]
@@ -65,6 +68,7 @@ module = ["app.worker.*", "app.modules.*.tasks"]
 disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]
+cache_dir = "/tmp/pytest_cache"
 testpaths = ["tests"]
 markers = [
     "reference_fixture: needs the private reference workbook; skipped when it is absent",

@@ -19,6 +19,7 @@ export function EmailPage() {
     <>
       <h1>Email</h1>
       <MailboxSummary />
+      <SendsToCheck />
       <RepliesToReview />
       <OutreachRules />
       {can("crm.read") ? <Suppressions /> : null}
@@ -48,6 +49,74 @@ function MailboxSummary() {
         </p>
       ))}
     </>
+  );
+}
+
+/** Messages that did not go out cleanly. An uncertain one is never sent again by the application. */
+function SendsToCheck() {
+  const { tenantId, can, me } = useAuth();
+  const queryClient = useQueryClient();
+  const key = ["send-intents", "attention"];
+  const intents = useTenantQuery(key, () =>
+    unwrap(api.GET("/api/v1/send-intents", { params: { query: { needs_attention: true } } })),
+  );
+  const resolve = useMutation({
+    mutationFn: ({ id, sent, note }: { id: string; sent: boolean; note: string }) =>
+      unwrap(api.POST("/api/v1/send-intents/{intent_id}/resolve", { params: { path: { intent_id: id } }, body: { sent, note } })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: tenantKey(tenantId, key) }),
+  });
+  if (intents.isPending) return null;
+  if (intents.isError) return <ErrorState error={intents.error} onRetry={() => void intents.refetch()} />;
+  if (intents.data.length === 0) return null;
+
+  function decide(id: string, sent: boolean, question: string) {
+    const note = window.prompt(question);
+    if (note) resolve.mutate({ id, sent, note });
+  }
+
+  return (
+    <section className="panel" aria-labelledby="sends-heading">
+      <h2 id="sends-heading">Sends to check</h2>
+      <ul className="rows">
+        {intents.data.map((intent) => (
+          <li key={intent.id} className="row">
+            <div className="row-main">
+              <span className="row-title">
+                {intent.subject ?? "(no subject)"} → {intent.to_address}
+              </span>
+              <span className="badge badge-warn">
+                {intent.state === "unknown" ? "Not known whether it was sent" : intent.state === "failed" ? "Not sent" : "Stopped before sending"}
+              </span>
+              <span className="muted">
+                {intent.state_reason} · requested for {formatDateTime(intent.scheduled_for, me.active_tenant?.timezone)}
+              </span>
+              {intent.state === "unknown" ? (
+                <span className="muted">It will not be sent again automatically. Look in the mailbox&apos;s Sent folder.</span>
+              ) : null}
+            </div>
+            {can("outreach.approve") ? (
+              <div className="row-actions">
+                {intent.state === "unknown" ? (
+                  <>
+                    <button type="button" className="button" disabled={resolve.isPending} onClick={() => decide(intent.id, true, "Where and when did you see it in the Sent folder?")}>
+                      It is in Sent<span className="visually-hidden">: {intent.subject}</span>
+                    </button>
+                    <button type="button" className="button" disabled={resolve.isPending} onClick={() => decide(intent.id, false, "What did you check to confirm it was not sent?")}>
+                      It was not sent<span className="visually-hidden">: {intent.subject}</span>
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="button" disabled={resolve.isPending} onClick={() => decide(intent.id, false, "Note for the record (what will be done about it)")}>
+                    Acknowledge<span className="visually-hidden">: {intent.subject}</span>
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {resolve.isError ? <ErrorState error={resolve.error} /> : null}
+    </section>
   );
 }
 

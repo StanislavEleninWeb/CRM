@@ -65,6 +65,18 @@ def content_hash(to_address: str, subject: str, body: str, sender: str) -> str:
     ).hexdigest()
 
 
+def lock_recipient(db: Session, tenant_id: UUID, address: str) -> None:
+    """Serialise decisions about one recipient until the transaction ends.
+
+    The final check before a send and anything that would stop it (an opt-out, a suppression,
+    a reply, a permanent bounce) take this lock, so one of them is always seen by the other.
+    """
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+        {"k": f"email-recipient:{tenant_id}:{address.lower()}"},
+    )
+
+
 def current_policy(db: Session, tenant_id: UUID, jurisdiction: str = "BG") -> Any:
     """The approved policy if there is one, otherwise the latest draft."""
     return (

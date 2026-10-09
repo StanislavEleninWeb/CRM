@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     # External tenants cannot connect Gmail until the verification and assessment gate passes (CRM-114).
     external_gmail_enabled: bool = False
 
+    # Whether approved messages leave the building. "off": send requests are refused.
+    # "dry_run": every step runs except the provider call. "live": messages are sent.
+    email_dispatch: Literal["off", "dry_run", "live"] = "off"
+    send_lease_seconds: int = Field(default=90, ge=10, le=900)
+    send_schedule_max_days: int = Field(default=60, ge=1, le=365)
+
     s3_endpoint_url: str = ""
     s3_bucket: str = "crm-local"
     s3_access_key: str = ""

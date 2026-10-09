@@ -214,6 +214,25 @@
         "title": "AdapterOut",
         "type": "object"
       },
+      "ApproveDraft": {
+        "properties": {
+          "review_note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required when the rules ask for a person to review this recipient",
+            "title": "Review Note"
+          }
+        },
+        "title": "ApproveDraft",
+        "type": "object"
+      },
       "AssessmentEdit": {
         "additionalProperties": false,
         "properties": {
@@ -4309,6 +4328,28 @@
               }
             ],
             "title": "Mailbox Id"
+          },
+          "review_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Note"
+          },
+          "send": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SendIntentOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest send request for this draft, if any"
           },
           "status": {
             "enum": [
@@ -8641,6 +8682,27 @@
         "title": "ResolveIn",
         "type": "object"
       },
+      "ResolveSend": {
+        "properties": {
+          "note": {
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Note",
+            "type": "string"
+          },
+          "sent": {
+            "description": "Whether the message is in the mailbox's Sent folder",
+            "title": "Sent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sent",
+          "note"
+        ],
+        "title": "ResolveSend",
+        "type": "object"
+      },
       "RestrictionIn": {
         "additionalProperties": false,
         "properties": {
@@ -9255,6 +9317,152 @@
         "title": "ScoreOut",
         "type": "object"
       },
+      "SendDraft": {
+        "properties": {
+          "scheduled_local": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Wall-clock time in the workspace time zone. Omit to send as soon as possible.",
+            "title": "Scheduled Local"
+          }
+        },
+        "title": "SendDraft",
+        "type": "object"
+      },
+      "SendIntentOut": {
+        "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "delivery_evidence": {
+            "description": "What is known after the provider accepted it. 'none' is not a confirmation of delivery.",
+            "enum": [
+              "none",
+              "bounced",
+              "replied"
+            ],
+            "title": "Delivery Evidence",
+            "type": "string"
+          },
+          "dispatched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatched At"
+          },
+          "draft_id": {
+            "format": "uuid",
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "draft_version": {
+            "title": "Draft Version",
+            "type": "integer"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "needs_attention": {
+            "title": "Needs Attention",
+            "type": "boolean"
+          },
+          "scheduled_for": {
+            "format": "date-time",
+            "title": "Scheduled For",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "claimed",
+              "dispatching",
+              "provider_accepted",
+              "failed",
+              "cancelled",
+              "unknown",
+              "blocked",
+              "simulated"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "state_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Reason"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "to_address": {
+            "title": "To Address",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "draft_id",
+          "draft_version",
+          "to_address",
+          "kind",
+          "state",
+          "state_reason",
+          "scheduled_for",
+          "dispatched_at",
+          "accepted_at",
+          "delivery_evidence",
+          "dry_run",
+          "needs_attention"
+        ],
+        "title": "SendIntentOut",
+        "type": "object"
+      },
       "SenderIdentity": {
         "properties": {
           "sender_identity": {
@@ -9269,6 +9477,56 @@
           "sender_identity"
         ],
         "title": "SenderIdentity",
+        "type": "object"
+      },
+      "SendingStatus": {
+        "properties": {
+          "daily_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Limit"
+          },
+          "mode": {
+            "enum": [
+              "off",
+              "dry_run",
+              "live"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "needs_attention": {
+            "title": "Needs Attention",
+            "type": "integer"
+          },
+          "oldest_waiting_seconds": {
+            "title": "Oldest Waiting Seconds",
+            "type": "integer"
+          },
+          "sent_last_24h": {
+            "title": "Sent Last 24H",
+            "type": "integer"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "waiting",
+          "needs_attention",
+          "oldest_waiting_seconds",
+          "sent_last_24h",
+          "daily_limit"
+        ],
+        "title": "SendingStatus",
         "type": "object"
       },
       "SessionOut": {
@@ -14523,6 +14781,235 @@
           }
         },
         "summary": "Update Draft",
+        "tags": [
+          "email"
+        ]
+      }
+    },
+    "/api/v1/email-drafts/{draft_id}/approve": {
+      "post": {
+        "description": "Approve exactly this recipient, subject, text and sender. Any later change withdraws the approval.",
+        "operationId": "approveEmailDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Draft",
+        "tags": [
+          "email"
+        ]
+      }
+    },
+    "/api/v1/email-drafts/{draft_id}/send": {
+      "post": {
+        "description": "Ask for one approved message to be sent, now or at a chosen time. Asking twice does not send twice.",
+        "operationId": "sendEmailDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendIntentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send Draft",
+        "tags": [
+          "email"
+        ]
+      }
+    },
+    "/api/v1/email-sending": {
+      "get": {
+        "operationId": "getEmailSendingStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendingStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Sending Status",
         "tags": [
           "email"
         ]
@@ -21156,6 +21643,242 @@
         "summary": "Delete Saved View",
         "tags": [
           "views"
+        ]
+      }
+    },
+    "/api/v1/send-intents": {
+      "get": {
+        "description": "Messages waiting to go, and those a person has to look at.",
+        "operationId": "listSendIntents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "needs_attention",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Needs Attention",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SendIntentOut"
+                  },
+                  "title": "Response Listsendintents",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Send Intents",
+        "tags": [
+          "email"
+        ]
+      }
+    },
+    "/api/v1/send-intents/{intent_id}/cancel": {
+      "post": {
+        "description": "Stop a message that has not started sending.",
+        "operationId": "cancelSendIntent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Intent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendIntentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Cancel Send",
+        "tags": [
+          "email"
+        ]
+      }
+    },
+    "/api/v1/send-intents/{intent_id}/resolve": {
+      "post": {
+        "description": "Record what a person found for a send whose outcome is unknown, or acknowledge one that failed.",
+        "operationId": "resolveSendIntent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Intent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveSend"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendIntentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Resolve Send",
+        "tags": [
+          "email"
         ]
       }
     },
