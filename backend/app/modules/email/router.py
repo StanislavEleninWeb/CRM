@@ -1043,17 +1043,7 @@ def resolve_send(intent_id: UUID, body: ResolveSend, ctx: TenantContext = APPROV
         raise ConflictError("There is nothing to decide for this message.")
     if intent["state"] == "unknown":
         if body.sent:
-            execute(
-                ctx,
-                "UPDATE send_intents SET state = 'provider_accepted', accepted_at = now(), state_reason = 'Confirmed in the mailbox by a person.' "
-                "WHERE tenant_id = :tenant_id AND id = :id",
-                {"id": intent_id},
-            )
-            execute(
-                ctx,
-                "UPDATE email_drafts SET status = 'sent' WHERE tenant_id = :tenant_id AND id = :d",
-                {"d": intent["draft_id"]},
-            )
+            dispatch.accept(ctx.db, ctx.tenant_id, intent_id, None, None, "Confirmed in the mailbox by a person.")
         else:
             # It did not go. The draft becomes editable again; sending it needs a new approval and a new request.
             execute(

@@ -423,6 +423,91 @@ def test_no_database_lock_or_open_transaction_spans_the_provider_call(
     assert intent_row(ready, intent["id"])["state"] == "provider_accepted"
 
 
+def test_an_opt_out_and_the_final_check_wait_for_each_other_without_deadlock(
+    owner: TestClient, ready: dict[str, Any], client: TestClient, migrator_engine: Any
+) -> None:
+    box: FakeMailbox = ready["box"]
+    tenant, intent = ready["tenant"], request_send(owner, ready["draft"]["id"])
+    _, lease = dispatch._claim(tenant, UUID(intent["id"]))
+    result: list[Any] = []
+    with migrator_engine.connect() as holder:
+        # Something that concerns this recipient (say, an opt-out being recorded) is in progress.
+        holder.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"), {"k": f"email-recipient:{tenant}:{PROSPECT}"}
+        )
+        worker = threading.Thread(
+            target=lambda: result.append(dispatch._final_check(tenant, UUID(intent["id"]), lease))
+        )
+        worker.start()
+        worker.join(timeout=1.5)
+        assert worker.is_alive() and result == []  # the final check waits for it
+        # While waiting it holds no row that the opt-out needs: this would fail if the send row were locked first.
+        holder.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenant)})
+        locked = holder.execute(
+            text("SELECT 1 FROM send_intents WHERE id = :id FOR UPDATE NOWAIT"), {"id": intent["id"]}
+        )
+        assert locked.scalar() == 1
+        # The opt-out commits first, so it wins.
+        holder.execute(
+            text(
+                "INSERT INTO email_suppressions (tenant_id, scope, value, reason, source) "
+                "VALUES (:t, 'address', :a, 'opt_out', 'unsubscribe_link')"
+            ),
+            {"t": tenant, "a": PROSPECT},
+        )
+        holder.commit()
+    worker.join(timeout=20)
+    assert result == [None]
+    row = intent_row(ready, intent["id"])
+    assert row["state"] == "blocked" and box.sent == []
+
+    # The real opt-out endpoint and a final check, racing: never an error, and the opt-out is never the one that fails.
+    for _ in range(5):
+        sql(ready, "UPDATE email_suppressions SET lifted_at = now(), lift_note = 'test reset' WHERE lifted_at IS NULL")
+        draft = ok(
+            owner.post(
+                f"{API}/email-drafts", json={"lead_id": ready["lead"]["id"], "subject": "Race", "body_text": "r"}
+            ),
+            201,
+        )
+        racing = request_send(owner, draft["id"])
+        statuses: list[int] = []
+        errors: list[BaseException] = []
+
+        def opt_out(statuses: list[int] = statuses) -> None:
+            statuses.append(client.post(f"{API}/unsubscribe/{make_token(tenant, PROSPECT)}").status_code)
+
+        def send(intent_id: str = racing["id"], errors: list[BaseException] = errors) -> None:
+            try:
+                dispatch.process(tenant, UUID(intent_id))
+            except BaseException as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=opt_out), threading.Thread(target=send)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        assert statuses == [200] and errors == []
+        assert intent_row(ready, racing["id"])["state"] in ("provider_accepted", "blocked", "cancelled")
+        assert ok(owner.get(f"{API}/email-suppressions"))["items"][0]["lifted_at"] is None  # the opt-out is on record
+
+
+def test_a_poller_that_dies_before_handing_the_work_on_loses_nothing(owner: TestClient, ready: dict[str, Any]) -> None:
+    box: FakeMailbox = ready["box"]
+    intent = request_send(owner, ready["draft"]["id"])
+    lost = [job for job in due.claim_due(50) if job["kind"] == "email.send"]
+    assert len(lost) == 1  # claimed, and then the poller stopped before any task was published
+    assert [job for job in due.claim_due(50) if job["kind"] == "email.send"] == [] and box.sent == []
+    sql(ready, "UPDATE due_jobs SET lease_expires_at = now() - interval '1 second' WHERE kind = 'email.send'")
+    again = [job for job in due.claim_due(50) if job["kind"] == "email.send"]
+    assert len(again) == 1 and again[0]["lease_token"] != lost[0]["lease_token"]
+    assert due.run_claimed(again[0]) == "done" and len(box.sent) == 1
+    # The first claim's task turns up after all. Its lease is stale; nothing happens.
+    assert due.run_claimed(lost[0]) == "stale" and len(box.sent) == 1
+    assert intent_row(ready, intent["id"])["state"] == "provider_accepted"
+
+
 # --- uncertain outcomes are reconciled, never resent -----------------------------------------
 
 
@@ -536,6 +621,8 @@ def test_an_unresolved_send_waits_for_a_person_and_is_never_retried(
         confirmed["state"] == "provider_accepted"
         and ok(owner.get(f"{API}/email-drafts/{third_draft['id']}"))["status"] == "sent"
     )
+    kinds = [a["kind"] for a in ok(owner.get(f"{API}/activities", params={"lead_id": ready["lead"]["id"]}))["items"]]
+    assert kinds.count("email.sent") == 2  # a send confirmed by a person is recorded like any other
 
 
 def test_a_worker_that_dies_is_recovered_without_a_second_send(owner: TestClient, ready: dict[str, Any]) -> None:

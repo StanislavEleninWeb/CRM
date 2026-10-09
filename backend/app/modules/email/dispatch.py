@@ -236,6 +236,16 @@ def _final_check(tenant_id: UUID, intent_id: UUID, lease: UUID) -> dict[str, Any
     """Last look before sending. Commits ``dispatching`` and returns what to send, or says why not."""
     settings = get_settings()
     with _tx(tenant_id) as db:
+        # Lock order matters. An opt-out, a suppression and a reply take the recipient lock first and
+        # then touch the send row; taking them here in the other order could deadlock, and the
+        # database might then abort the opt-out. The recipient never changes after the request.
+        to_address = db.execute(
+            text("SELECT to_address FROM send_intents WHERE tenant_id = :t AND id = :id"),
+            {"t": tenant_id, "id": intent_id},
+        ).scalar()
+        if to_address is None:
+            return None
+        eligibility.lock_recipient(db, tenant_id, to_address)
         intent = (
             db.execute(
                 text(
@@ -281,7 +291,7 @@ def _final_check(tenant_id: UUID, intent_id: UUID, lease: UUID) -> dict[str, Any
             )
             return None
 
-        eligibility.lock_recipient(db, tenant_id, intent["to_address"])
+        # Evaluated after the recipient lock was granted, so anything that committed first is seen.
         body, decision = render(db, tenant_id, draft, mailbox, "dispatch")
         eligibility.record(
             db,
@@ -405,10 +415,13 @@ def _call_provider(tenant_id: UUID, ready: dict[str, Any]) -> dict[str, Any]:
     return {"result": "accepted", "message_id": message_id, "thread_id": thread_id}
 
 
-def _accept(db: Session, tenant_id: UUID, intent_id: UUID, message_id: str, thread_id: str | None, how: str) -> bool:
+def accept(
+    db: Session, tenant_id: UUID, intent_id: UUID, message_id: str | None, thread_id: str | None, how: str
+) -> bool:
+    """Record that the provider has the message, with everything that follows from it."""
     row = db.execute(
         text(
-            "UPDATE send_intents SET state = 'provider_accepted', provider_message_id = :pm, provider_thread_id = COALESCE(:pt, provider_thread_id), "
+            "UPDATE send_intents SET state = 'provider_accepted', provider_message_id = COALESCE(:pm, provider_message_id), provider_thread_id = COALESCE(:pt, provider_thread_id), "
             "accepted_at = now(), lease_token = NULL, lease_expires_at = NULL, state_reason = :how "
             "WHERE tenant_id = :t AND id = :id AND state IN ('dispatching', 'unknown') RETURNING draft_id, mailbox_id, to_address"
         ),
@@ -461,7 +474,7 @@ def _record(
     with _tx(tenant_id) as db:
         if result == "accepted":
             # True even if the lease ran out meanwhile: the provider has the message.
-            _accept(
+            accept(
                 db,
                 tenant_id,
                 intent_id,
@@ -562,7 +575,7 @@ def reconcile(tenant_id: UUID, intent_id: UUID) -> datetime | None:
         log.warning("email_reconcile_failed", intent_id=str(intent_id), error=str(exc))
     with _tx(tenant_id) as db:
         if found is not None:
-            _accept(db, tenant_id, intent_id, found[0], found[1], "Found in the mailbox after an uncertain send.")
+            accept(db, tenant_id, intent_id, found[0], found[1], "Found in the mailbox after an uncertain send.")
             return None
         # Not finding it proves nothing: the provider's search can lag behind. It stays unknown.
         attempts = db.execute(

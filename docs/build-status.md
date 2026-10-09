@@ -82,5 +82,6 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - Email: eligibility is decided only by `app.modules.email.eligibility.evaluate`; anything that sends must call it at send time, not rely on an earlier preview. Mailbox HTML is sanitised on the server and the frontend still shows plain text only.
 - A Gmail notification is a trigger, never data: the cursor moves only after a page of history has been stored and committed.
 - A send is a `send_intents` row with explicit states; `app.modules.email.dispatch` is the only code that calls the provider's send. A handler that does anything slow commits first, so no lock is held across a network call.
-- `dispatching` or `unknown` is never returned to `queued` by code. Only a person's recorded decision ends an unknown send.
+- `unknown` is never returned to `queued` by code; only finding the message in the mailbox or a person's recorded decision ends it. `dispatching` returns to `queued` in exactly one case: the provider answered with a definite "slow down" refusal, so the message was not sent.
+- Lock order for anything touching a recipient's sends: the recipient advisory lock (`eligibility.lock_recipient`) first, then `send_intents`, `email_drafts`, `mailboxes`.
 - Events are written with `app.core.outbox.emit` in the same transaction as the change.

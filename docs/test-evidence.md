@@ -309,9 +309,11 @@ What is covered:
 
 | Command | Result |
 |---|---|
-| `pytest` (reference workbook present) | 289 passed, 0 skipped |
+| `pytest` (reference workbook present) | 291 passed, 0 skipped |
 | `ruff`, `mypy app` | Clean |
 | Frontend `typecheck`, `lint`, `test`, `build` | Clean; 29 tests passed |
+| Lint, type-check and `pytest` as a container user that cannot write to the source tree | Clean; 291 passed (the condition that failed on GitHub) |
+| `alembic upgrade head`, `downgrade base`, `upgrade head` on a scratch database | Clean through revision 0009 |
 | GitHub Actions on pull request 2 (phases 00–08) | frontend and images passed; backend failed at lint because the linter could not write its cache in the mounted source tree. Caches now go to `/tmp`; not yet re-run on GitHub |
 
 **No email has been sent.** `EMAIL_DISPATCH` is `off` by default; the tests switch it on against a fake mailbox inside the test process. The dispatcher was exercised in-process with real PostgreSQL and concurrent threads, not through the separately running worker container (the fake mailbox lives in one process's memory). The scheduler-to-worker path for due rows in general was verified in phase 07.
@@ -323,6 +325,8 @@ What is covered:
 - **Approval binding.** Editing the text, subject or recipient withdraws approval. Changing the sender identification after approval blocks the request; the same change between request and dispatch blocks at the last check.
 - **Review.** A recipient needing review cannot be approved without a note; a review reason nobody looked at appearing later blocks at dispatch; a block cannot be approved, and the refused attempt is recorded.
 - **Before dispatch.** An opt-out through the signed link, a manual suppression, a register that became stale and a reply from the recipient each stop a waiting unsolicited message. A reply being written in the same conversation is not stopped, and is sent without the unsolicited label or unsubscribe headers.
+- **Lock order.** With the recipient lock held elsewhere, the final check waits without holding the send row, so the opt-out can proceed; whichever commits first wins. The real opt-out endpoint raced against a send five times: the opt-out always returned 200 and was recorded. (A review found the original order could deadlock and abort the opt-out; it was reversed.)
+- **Lost poller.** A due row claimed by a poller that died before publishing its task is claimed again after the lease and sent once; the first claim's late task is rejected as stale.
 - **Cancellation.** A waiting message can be cancelled; one already sent cannot, and says so.
 - **Exactly once.** One poller gets the due row. Eight simultaneous workers — half as the same task delivered again, half as direct calls — produce one send and one activity.
 - **No lock across the network.** While the provider call is in flight, another connection locks the intent, draft, mailbox and due rows with `NOWAIT`, and PostgreSQL reports no idle-in-transaction session. An opt-out arriving at that moment is recorded and the in-flight message completes, as documented.
