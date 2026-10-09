@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core`; pull request StanislavEleninWeb/CRM#2 holds phases 00–08 (first commit); later commits are local until the owner asks for a push |
-| Last completed phase | 12 (releases A and B implemented; B live gates blocked; commercial core in progress) |
-| Next action | Phase 13: production images and Compose, release pipeline, backups and restore check, runbooks. No hosting target exists (U-07): prepare and validate locally, deploy nothing |
+| Last completed phase | 12. Phase 13 is prepared but not complete (see its row) |
+| Next action | Phase 14: end-to-end evidence, adversarial isolation checks, failure rehearsals, pilot handoff with the capability matrix. To finish phase 13: rebuild the production images and run `infra/checks/image-checks.sh` when the registries are reachable; pin the remaining images by digest; run the release workflow once a host exists |
 
 ## Phases
 
@@ -28,7 +28,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 10 Public API, webhooks, Hermes | DONE | see `git log` (`Phase 10`) | Webhook delivery verified against a mocked receiver only |
 | 11 Subscriptions and entitlements | DONE except the Stripe sandbox run | see `git log` (`Phase 11`) | `BILLING_MODE=off` by default. Plans are labelled test plans; no price is approved (U-08). Stripe has never been contacted |
 | 12 Reporting and operational controls | DONE with stated gaps | see `git log` (`Phase 12`) | No report filter by city or service; backup retention window open until hosting exists |
-| 13 Staging and deployment pipeline | TODO | — | |
+| 13 Staging and deployment pipeline | IN_PROGRESS | see `git log` (`Phase 13`) | Nothing deployed (U-07). Configuration, scripts, backups, monitoring and runbooks are in place; production images were not rebuilt or started in this session |
 | 14 Release evidence and handoff | TODO | — | |
 | 15 Deferred extensions | Not run implicitly | — | |
 
@@ -53,7 +53,7 @@ See `release-gates.md` and the unresolved list in `decisions.md` (U-01 to U-10).
 
 ## Dependency versions (phase 01)
 
-Pinned in `backend/uv.lock` and `frontend/pnpm-lock.yaml`; base images pinned by digest.
+Pinned in `backend/uv.lock` and `frontend/pnpm-lock.yaml`. Base images `python`, `node`, `postgres`, `redis`, Dex and SeaweedFS are pinned by digest. **Pinned by tag only, still to be pinned by digest:** `ghcr.io/astral-sh/uv:0.12.23`, `nginxinc/nginx-unprivileged:1.29-alpine` and `caddy:2.10-alpine`.
 
 | Component | Version |
 |---|---|
@@ -96,3 +96,5 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - Anything that can create a company, lead or message from outside (import, research, mailbox) must ask `dataops.service.is_erased` first.
 - Support access is not a membership and is an allow-list: `app.core.access_policy.SUPPORT_READABLE` and `SUPPORT_COMMUNICATIONS`. A new read route is closed to support until it is added to one of them; a test sweeps every GET route.
 - What a workspace may still do when its subscription is not in good standing is the allow-list `ALLOWED_WHEN_RESTRICTED`: reducing access, stopping contact, removing data, billing. Never add something that creates or sends.
+- Hosted environments use `infra/production/compose.yaml` with images by digest; migrations run only as the one-off `migrate` job from `infra/deploy/deploy.sh`. The development `compose.yaml` is never used for hosting.
+- Monitoring reads `ops_snapshot()` through `/ops/metrics`. A definer function that reads `send_intents`, `mailboxes`, `webhook_endpoints`, `webhook_deliveries`, `research_runs` or `regulatory_sources` must not rely on row security alone while `app.ops_snapshot` could be set: filter by tenant explicitly.

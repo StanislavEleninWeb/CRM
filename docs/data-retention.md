@@ -54,8 +54,8 @@ Deletion cannot be scheduled while a subscription is running, so a deleted works
 
 `infra/backup/backup.sh` produces database dumps. A deleted or erased record remains inside dumps taken before the deletion until those dumps are removed.
 
-- **The backup retention window has not been set.** It depends on the hosting target (U-07). Until it is, do not tell anyone how long backups persist. Phase 13 records the configured value here.
-- Backups are restored only to recover from a failure. After a restore, erasures made since the dump must be re-applied; the tombstones do not survive a restore from before the erasure, so the audit log of the period and any erasure requests received must be replayed by hand. **This re-application is a manual procedure and is not automated.**
+- **Backup retention window: 30 days by default** (`BACKUP_RETENTION_DAYS` in `infra/backup/backup-encrypted.sh`). A deleted or erased record can be recovered from a backup for that long, and not after. This is the configured default of the script; no hosted environment exists yet, so no backup has been taken under it.
+- Backups are restored only to recover from a failure. A restore from before an erasure brings the record back **and loses its tombstone and its audit entry**, so erasures and opt-outs made since the backup must be re-applied by hand from a record kept outside the database. The steps are in `docs/runbooks/backup-restore.md`. This is not automated.
 - No claim is made that data is erased from backups before they expire.
 
 ## Support access

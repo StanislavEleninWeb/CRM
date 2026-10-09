@@ -759,3 +759,71 @@ def test_the_security_log_is_purged_only_past_its_retention(
         db.execute(text("SELECT audit_events_purge(30)"))
     with session_scope(RlsContext(tenant_id=tenant)) as db, pytest.raises(Exception, match="permission denied"):
         db.execute(text("SELECT * FROM billing_events"))
+
+
+def test_monitoring_figures_are_counts_across_workspaces_behind_a_token(
+    owner: TestClient, tenant: UUID, make_client: Any, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.config import get_settings
+
+    # Closed unless a token is configured, and then only to its holder. A wrong token looks like a missing page.
+    assert client.get("/ops/metrics").status_code == 404
+    monkeypatch.setattr(get_settings(), "ops_metrics_token", "monitoring-token-for-tests-0001")
+    assert client.get("/ops/metrics").status_code == 404
+    assert client.get("/ops/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 404
+    assert owner.get("/ops/metrics").status_code == 404  # being signed in is not enough
+
+    other = make_client()
+    sign_in(other, "other@example.test")
+    other_tenant = UUID(create_workspace(other, "Another customer"))
+    for workspace in (tenant, other_tenant):
+        mailbox, draft = uuid4(), uuid4()
+        sql(
+            workspace,
+            "INSERT INTO mailboxes (id, tenant_id, provider, email_address, mode, status, last_synced_at, watch_expires_at) "
+            "VALUES (:m, :t, 'gmail', 'sales@seweb.example', 'internal', 'active', now() - interval '2 hours', now() + interval '3 hours')",
+            m=mailbox,
+        )
+        sql(
+            workspace,
+            "INSERT INTO email_drafts (id, tenant_id, mailbox_id, kind, to_address, subject, body_text, status) "
+            "VALUES (:d, :t, :m, 'reply', 'private.person@example.bg', 'Private subject', 'b', 'queued')",
+            d=draft,
+            m=mailbox,
+        )
+        sql(
+            workspace,
+            "INSERT INTO send_intents (tenant_id, draft_id, mailbox_id, draft_version, content_hash, to_address, kind, scheduled_for, "
+            "rfc_message_id, state, dispatched_at) VALUES (:t, :d, :m, 1, 'h', 'private.person@example.bg', 'reply', now(), :rfc, "
+            "'unknown', now() - interval '30 minutes')",
+            d=draft,
+            m=mailbox,
+            rfc=f"<{uuid4()}@seweb.example>",
+        )
+    sql(tenant, "UPDATE due_jobs SET due_at = now() - interval '5 minutes' WHERE kind = 'retention.purge'")
+
+    response = client.get("/ops/metrics", headers={"Authorization": "Bearer monitoring-token-for-tests-0001"})
+    assert response.status_code == 200 and response.headers["content-type"].startswith("text/plain")
+    figures = {line.split()[0]: float(line.split()[1]) for line in response.text.strip().splitlines()}
+    assert figures["crm_sends_unknown"] == 2  # both workspaces, as a total
+    assert 1700 < figures["crm_sends_oldest_unknown_seconds"] < 1900
+    assert figures["crm_mailboxes_sync_stale"] == 2 and figures["crm_mailbox_watches_expiring_24h"] == 2
+    assert figures["crm_due_jobs_due"] >= 1 and figures["crm_due_jobs_oldest_due_seconds"] >= 290
+    assert {"crm_webhook_endpoints_failing", "crm_research_runs_paused", "crm_regulatory_sources_expired"} <= set(
+        figures
+    )
+    # Counts only: nothing that identifies a workspace, a person or a message.
+    for private in (
+        "private.person",
+        "Private subject",
+        "seweb.example",
+        str(tenant),
+        str(other_tenant),
+        "Another customer",
+    ):
+        assert private not in response.text
+    # The switch the snapshot uses gives the application's own database role nothing.
+    with session_scope(RlsContext(tenant_id=tenant)) as db:
+        db.execute(text("SELECT set_config('app.ops_snapshot', 'on', true)"))
+        assert db.execute(text("SELECT count(*) FROM send_intents")).scalar() == 1
+        assert db.execute(text("SELECT count(*) FROM mailboxes")).scalar() == 1

@@ -3,7 +3,7 @@
 from typing import Literal
 
 import redis
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -84,3 +84,21 @@ def info() -> SystemInfo:
 @api_router.get("/readiness", response_model=Readiness, operation_id="getReadiness")
 def readiness(response: Response) -> Readiness:
     return readyz(response)
+
+
+@router.get("/ops/metrics", include_in_schema=False)
+def ops_metrics(request: Request) -> Response:
+    """Counts for monitoring, across all workspaces, in the Prometheus text format. No names, addresses or contents.
+
+    Closed unless ``OPS_METRICS_TOKEN`` is set, and then only to a caller presenting it.
+    """
+    from app.core.security import constant_time_equal
+
+    token = get_settings().ops_metrics_token
+    supplied = request.headers.get("Authorization", "")
+    if not token or not constant_time_equal(supplied, f"Bearer {token}"):
+        return Response(status_code=404)
+    with session_scope() as session:
+        rows = session.execute(text("SELECT name, value FROM ops_snapshot()")).all()
+    lines = [f"crm_{row.name} {row.value:g}" for row in rows]
+    return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")

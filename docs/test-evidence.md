@@ -474,3 +474,36 @@ A review of phases 11 and 12 found the following; each was fixed and has a test.
 - Also: a payment refusal or a plan-limit refusal is no longer stored against an idempotency key; the security-log retention setting now has effect, through a function that cannot go below a year or outside the current workspace; a workspace with a running subscription cannot be scheduled for deletion; the erasure hashes have their own key; the application's database role can no longer read billing events of all tenants; granting support access no longer reveals whether an address has an account.
 
 Not covered by a test: that a research run skips an erased business (the check is in place and uses the same function the import and mailbox tests exercise).
+
+## Phase 13 — 9 October 2026
+
+**Nothing was deployed.** There is no hosting target (U-07). This phase is prepared, not complete.
+
+| Check | Result |
+|---|---|
+| `pytest` (reference workbook present) | 356 passed, 0 skipped |
+| `ruff`, `mypy app`; OpenAPI file current | Clean |
+| `docker compose -f infra/production/compose.yaml … config` with every profile | Validates. Without image references it refuses to render |
+| Only the proxy publishes ports in the rendered configuration | Confirmed (80 and 443); database and Redis are on an internal network |
+| Settings loaded from `infra/production/env.example` in a staging environment | Refused: "session_secret still contains a placeholder value" |
+| `deploy.sh` with images not pinned by digest | Refused |
+| `remote.sh` and `smoke-remote.sh` with no host configured | Do nothing and say so |
+| Shell scripts parse (`sh -n`); workflow and Compose YAML parse | Yes. One quoting error in `remote.sh` was found this way and fixed |
+| `infra/checks/upgrade-from-previous.sh` | Passed: schema at revision 0008 with a workspace and a company, upgraded to 0014; data kept, retention job created for the existing workspace, plans seeded |
+| Migrations up, down to base, up | Clean through 0013 (run before 0014 was added; 0014 was applied by the upgrade check and the test suite, its downgrade has not been run) |
+| Encrypted backup on the local stack | Created (about 416 KB); not readable by `pg_restore` without the passphrase |
+| `restore-check.sh` on the encrypted backup | Passed: 70 tables, 216 rows, 83 policies, row-level security intact |
+| Wrong passphrase; file altered by one byte | Both refused (decryption failure; checksum mismatch) |
+| Backups older than the retention window | Removed by the next run |
+| `/ops/metrics` | Closed without a token and to a wrong one; with it, totals across two workspaces and nothing identifying either |
+| Development-stack smoke test (`infra/smoke.sh`) and API examples | Passed on a fresh stack |
+
+**Not done, and why:**
+
+- **Production images were not built at the current commit.** `docker build` could not resolve base-image metadata from Docker Hub and GHCR from this machine (timeouts). The production stages of both Dockerfiles are unchanged since the `images` job built them on GitHub for pull request 2. `infra/checks/image-checks.sh` has therefore **never been run**; it is written and parses.
+- **The production stack was not started**, for the same reason. It is validated as configuration only.
+- **The release workflow has never run.** It reuses the CI workflow, builds once, pushes under the commit SHA and deploys digests; the deploy and smoke jobs skip themselves without a host. The `production` environment's required-reviewer rule is a repository setting that does not exist yet.
+- **Rollback was not rehearsed.** The procedure and its limits are written down.
+- **Three images are pinned by tag, not digest** (uv, nginx-unprivileged, caddy); their digests could not be fetched in this session. Earlier status text saying all base images were pinned by digest was wrong and is corrected.
+- No error-tracking service is connected. No off-host backup destination or schedule exists.
+- The restore check found a stale local database (an edited migration applied earlier), not a product fault; it passed on a fresh stack. It now names the table when it fails.

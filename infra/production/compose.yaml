@@ -1,0 +1,139 @@
+# Production-oriented stack for one host. Nothing here has been deployed: there is no hosting
+# target yet. Validate with:  docker compose -f infra/production/compose.yaml --env-file <file> config
+#
+# Images are referenced by digest, set by the release workflow, so staging and production
+# run exactly the bytes that were tested. Secrets come from an env file that is not in the repository.
+name: seweb-crm-prod
+
+x-backend: &backend
+  image: ${API_IMAGE:?set API_IMAGE to an image reference with a digest}
+  env_file: ["${ENV_FILE:-/etc/seweb-crm/env}"]
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  networks: [internal]
+  depends_on:
+    db: {condition: service_healthy}
+    redis: {condition: service_healthy}
+  logging: &logging
+    driver: json-file
+    options: {max-size: "20m", max-file: "5"}
+
+services:
+  proxy:
+    # Terminates TLS and is the only service with published ports. If the host already runs a
+    # reverse proxy on 80/443, do not start this one: point the existing proxy at frontend:8080
+    # and api:8000 instead (see docs/runbooks/deployment.md).
+    image: caddy:2.10-alpine
+    profiles: [proxy]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST, for example crm.example.com}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL for certificate notices}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    depends_on: [api, frontend]
+    deploy: {resources: {limits: {cpus: "0.50", memory: 256M}}}
+    logging: *logging
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?set FRONTEND_IMAGE to an image reference with a digest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    deploy: {resources: {limits: {cpus: "0.25", memory: 128M}}}
+    logging: *logging
+
+  api:
+    <<: *backend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*", "--workers", "2"]
+    networks: [internal, edge]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy: {resources: {limits: {cpus: "1.00", memory: 768M}}}
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel", "INFO", "--concurrency", "4"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy: {resources: {limits: {cpus: "1.00", memory: 768M}}}
+
+  scheduler:
+    # Exactly one. It only asks the worker to poll the database; the schedule itself lives in PostgreSQL.
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    deploy: {replicas: 1, resources: {limits: {cpus: "0.25", memory: 256M}}}
+
+  migrate:
+    # A one-off job, run by the deploy script before the services are replaced. It is never
+    # started by "up", and no API replica runs migrations at start-up.
+    <<: *backend
+    profiles: [release]
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db: {condition: service_healthy}
+
+  db:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    restart: unless-stopped
+    env_file: ["${DB_ENV_FILE:-/etc/seweb-crm/db.env}"]
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+    shm_size: 256m
+    deploy: {resources: {limits: {cpus: "2.00", memory: 2G}}}
+    logging: *logging
+
+  redis:
+    # A queue for short tasks only. Nothing durable is kept here; losing it loses no schedule.
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+    deploy: {resources: {limits: {cpus: "0.50", memory: 384M}}}
+    logging: *logging
+
+networks:
+  # Database and queue are reachable only from the application containers. No port is published.
+  internal: {internal: true}
+  edge: {}
+
+volumes:
+  db-data: {}
+  caddy-data: {}
+  caddy-config: {}

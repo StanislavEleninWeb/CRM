@@ -126,10 +126,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-130 | Immutable images | Images build; no secrets inside | TODO |
-| CRM-131 | GitHub Actions release | Failed health or migration blocks promotion | TODO |
-| CRM-132 | Staging and runbooks | Smoke checks pass locally or on staging | TODO |
-| CRM-133 | Backup recovery | Isolated restore recovers data | TODO |
+| CRM-130 | Immutable images | Images build; no secrets inside | IN_PROGRESS — production stages unchanged since they built on GitHub for PR 2; not rebuilt at the current commit (registry timeouts locally); the image check script has not been run; two base images and the proxy are pinned by tag, not digest |
+| CRM-131 | GitHub Actions release | Failed health or migration blocks promotion | IN_PROGRESS — workflow written and parsed; never run. Needs repository environments and a host (U-07) |
+| CRM-132 | Staging and runbooks | Smoke checks pass locally or on staging | IN_PROGRESS — runbooks written; development-stack smoke test passes; production stack validated as configuration only, not started |
+| CRM-133 | Backup recovery | Isolated restore recovers data | DONE locally — encrypted backup, restore into a scratch database, pruning. Off-host copy and schedule need a host (U-07) |
 
 ## Phase 14 — release evidence and handoff (P0, depends on 13)
 

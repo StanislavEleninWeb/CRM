@@ -53,7 +53,12 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Workspace export, and deletion after a cancellable waiting period | PASS (local) |
 | Support access: owner-granted, read-only, logged, expiring | PASS (local) |
 | Backup retention window defined; erasure re-applied after a restore | NOT_STARTED — needs the hosting target (U-07); documented as a manual procedure |
-| Images, pipeline, restore, rollback | NOT_STARTED |
+| Production images build and pass the image checks | NOT VERIFIED at the current commit — registry lookups timed out locally; the unchanged production stages built on GitHub for PR 2 |
+| Production configuration validates; placeholders and unpinned images are refused | PASS (local) |
+| Release pipeline run end to end | NOT RUN — never executed; needs environments and a host |
+| Clean migration, and upgrade from the first published revision with data | PASS (local) |
+| Encrypted backup restores into an isolated database | PASS (local) |
+| Rollback rehearsed | NOT RUN — procedure documented only |
 | Staging deployment | BLOCKED — no hosting target (U-07) |
 
 ## External Gmail launch (CRM-114)

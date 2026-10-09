@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     external_gmail_verification_ref: str = ""
     external_gmail_assessment_valid_until: date | None = None
 
+    # Bearer token for /ops/metrics. Empty closes the endpoint.
+    ops_metrics_token: str = ""
+
     # Keys the hashes that remember erased businesses. Changing it un-erases them: every
     # tombstone would have to be recreated. Falls back to the session secret when empty.
     erasure_hash_key: str = ""
@@ -114,6 +117,8 @@ class Settings(BaseSettings):
                 "s3_secret_key",
                 "gmail_client_secret",
                 "stripe_secret_key",
+                "ops_metrics_token",
+                "erasure_hash_key",
                 "stripe_webhook_secret",
             ):
                 if PLACEHOLDER_PREFIX in str(getattr(self, name)):
