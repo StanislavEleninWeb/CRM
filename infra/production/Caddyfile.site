@@ -1,19 +1,18 @@
-# Site block for crm.seweb.co, for a Caddy that already runs on the host (today: the one that
-# belongs to the Hermes project). Import this file from that Caddy's configuration and reload it.
+# Site file for crm.seweb.co, installed into the server's shared proxy
+# (https://github.com/StanislavEleninWeb/caddy) by the deployment:  edge-site install crm <this file>
 #
 # The name is proxied by Cloudflare, so:
-#   - the certificate is a Cloudflare Origin Certificate installed by hand (Caddy cannot obtain a
-#     public one for a proxied name), and Cloudflare's SSL mode must be "Full (strict)";
+#   - the certificate is a Cloudflare Origin Certificate placed by hand in /etc/edge/certs/crm/
+#     (Caddy cannot obtain a public one for a proxied name), and Cloudflare's SSL mode is "Full (strict)";
 #   - only Cloudflare may connect: it presents a client certificate (Authenticated Origin Pulls),
 #     and a request that reaches the server's address directly is refused during the TLS handshake.
 #
-# Paths below are where this Caddy must be able to read the files. If Caddy runs in a container,
-# mount /etc/seweb-crm/edge read-only at the same path.
+# crm-api and crm-frontend are this application's containers on the shared "edge" network.
 crm.seweb.co {
-	tls /etc/seweb-crm/edge/origin.pem /etc/seweb-crm/edge/origin.key {
+	tls /etc/caddy/certs/crm/origin.pem /etc/caddy/certs/crm/origin.key {
 		client_auth {
 			mode require_and_verify
-			trust_pool file /etc/seweb-crm/edge/cloudflare-origin-pull-ca.pem
+			trust_pool file /etc/caddy/certs/crm/cloudflare-origin-pull-ca.pem
 		}
 	}
 
@@ -37,13 +36,13 @@ crm.seweb.co {
 		request_body {
 			max_size 25MB
 		}
-		reverse_proxy {$CRM_API_UPSTREAM:127.0.0.1:18000} {
+		reverse_proxy crm-api:8000 {
 			# The visitor's address as Cloudflare saw it; the connecting address is always Cloudflare's.
 			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
 		}
 	}
 
 	handle {
-		reverse_proxy {$CRM_FRONTEND_UPSTREAM:127.0.0.1:18080}
+		reverse_proxy crm-frontend:8080
 	}
 }

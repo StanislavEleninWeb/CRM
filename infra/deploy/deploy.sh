@@ -58,5 +58,12 @@ fi
 echo "6. Replace the services and wait until they are healthy"
 $COMPOSE $PROFILE_ARGS up -d --wait --remove-orphans api worker scheduler frontend ${START_PROXY:-proxy}
 
+if [ -n "${EDGE_SITE_NAME:-}" ]; then
+  echo "7. Install this application's site file into the shared proxy"
+  # Validates the proxy's whole configuration first and restores the previous file if it is not valid,
+  # so a mistake here cannot take other projects on the server offline.
+  "${EDGE_SITE_COMMAND:-edge-site}" install "$EDGE_SITE_NAME" "$DIR/Caddyfile.site"
+fi
+
 printf 'API_IMAGE=%s\nFRONTEND_IMAGE=%s\nDEPLOYED_AT=%s\n' "$API_IMAGE" "$FRONTEND_IMAGE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STATE_DIR/current-release.env"
 echo "Deployed. Previous release, if any, is recorded in $STATE_DIR/previous-release.env"

@@ -1,13 +1,13 @@
 # Production setup: crm.seweb.co
 
-Decided on 9 October 2026: one environment (production) on the VPS `161.97.89.47`, deployed by GitHub Actions, files and backups on AWS S3, sign-in through AWS Cognito, certificate notices to `management@seweb.co`.
+Decided on 9 and 10 October 2026: one environment (production) on the VPS `161.97.89.47`, deployed by GitHub Actions, behind Cloudflare, files and backups on AWS S3 and sign-in through AWS Cognito (both in `eu-central-1`, managed with Terraform), a shared reverse proxy in its own repository, certificate notices to `management@seweb.co`.
 
 **State: prepared. Nothing below has been done yet, and nothing has been deployed.** Each step says who does it. Secrets are typed on the server or into GitHub; they are never put in the repository or sent in chat.
 
 Found by looking from outside, 9 October 2026:
 
 - `crm.seweb.co` has **no DNS record** yet.
-- The server **already runs Caddy on ports 80 and 443**. So this application does not start its own proxy: it listens on the server's loopback interface (`127.0.0.1:18000` for the API, `127.0.0.1:18080` for the pages) and the existing Caddy forwards to it.
+- The server **already runs Caddy on ports 80 and 443**, in a container that is part of the Hermes stack. Decided on 10 October: that proxy moves into its own repository and serves every project (step 3). The CRM publishes no ports; it joins the proxy's Docker network.
 
 ## 1. DNS and Cloudflare — you
 
@@ -22,82 +22,43 @@ Done on 9 October: `crm.seweb.co` exists and is **proxied by Cloudflare** (it re
 | Scrape Shield | **Email Address Obfuscation: off** for this name | It rewrites pages; a CRM shows many addresses |
 | Speed → Optimization | **Rocket Loader: off** for this name | It rewrites scripts |
 
-Download Cloudflare's origin-pull CA certificate (Cloudflare's documentation for Authenticated Origin Pulls links to it) and save it as `cloudflare-origin-pull-ca.pem`. The three files go on the server in step 4.
+Download Cloudflare's origin-pull CA certificate (Cloudflare's documentation for Authenticated Origin Pulls links to it) and save it as `cloudflare-origin-pull-ca.pem`. The three files go on the server in step 4, under `/etc/edge/certs/crm/`.
 
 What Cloudflare changes for the application: the server never sees the visitor's address directly, so the proxy passes on the one Cloudflare reports; uploads are limited by Cloudflare's plan (100 MB on the free plan, above this application's 25 MB); API answers are marked "do not store", so Cloudflare does not cache them. Opt-out links and provider callbacks go through Cloudflare like everything else: **do not put a challenge or bot rule on `/api/v1/unsubscribe/*` or `/api/v1/webhooks/*`**, or mail clients and providers will be blocked.
 
-## 2. AWS S3 — you
+## 2. AWS: buckets, keys and sign-in — you, with Terraform
 
-Pick one region (for example `eu-central-1`) and use it for everything below.
+Everything in AWS is described in `infra/terraform/` (region `eu-central-1`): the files bucket, the backups bucket with its 30-day expiry, two IAM users that can each do one thing, and the Cognito user pool and app client. Follow `infra/terraform/README.md`:
 
-| Bucket | For | Settings |
-|---|---|---|
-| files, e.g. `seweb-crm-files` | Uploaded prospect lists and attachments | Block all public access; default encryption on; versioning on |
-| backups, e.g. `seweb-crm-backups` | Encrypted database dumps | Block all public access; default encryption on; **lifecycle rule: expire objects after 30 days** |
+1. Create the Terraform state bucket once, by hand (three commands in the README). The state holds the Cognito client secret, so it lives in that private bucket, not in the repository.
+2. `terraform init`, `terraform plan`, read the plan, `terraform apply`.
+3. `terraform output` gives the values for step 5 below.
+4. Create one access key for each of the two IAM users **with the AWS CLI, not Terraform**, so the keys never enter the state.
+5. Create the people who may sign in (one command per person in the README). Nobody can register themselves.
 
-The 30 days is the backup retention window stated in `docs/data-retention.md`. If you choose another number, change it there too.
-
-Create **two IAM users with access keys**, each with only this policy (replace the bucket name):
-
-Application — objects in the files bucket, nothing else:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {"Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], "Resource": "arn:aws:s3:::seweb-crm-files/*"}
-  ]
-}
-```
-
-Backup — may add to the backups bucket, and read for a restore; cannot delete:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {"Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject"], "Resource": "arn:aws:s3:::seweb-crm-backups/*"},
-    {"Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::seweb-crm-backups"}
-  ]
-}
-```
-
-The application never lists or creates buckets, so a wrong bucket name shows up as a failed upload, not at start-up.
-
-## 3. AWS Cognito — you
-
-1. Create a **user pool**. Sign-in identifier: email. **Self-registration: off** (you create the users). **MFA: required** (authenticator app). Required attribute: `email`.
-2. Add a **domain** for the hosted sign-in page (a Cognito prefix domain is enough).
-3. Create an **app client** of type *confidential* (it has a client secret):
-   - Allowed callback URL: `https://crm.seweb.co/api/v1/auth/callback`
-   - Grant: authorization code. Scopes: `openid`, `email`, `profile`.
-4. Create the users (start with the owner's address). Each must have a **verified email**: the application refuses a sign-in whose `email_verified` is not true, and an invitation can only be accepted by the address it was sent to.
-5. Note three values for step 5: the **issuer** `https://cognito-idp.<region>.amazonaws.com/<user pool id>`, the **client ID** and the **client secret**.
+**The Terraform has been validated but never planned or applied.** The first `plan` is the real check.
 
 What to know about Cognito with this application:
 
 - The application speaks standard OpenID Connect and needed no change for Cognito, but **it has only ever signed in against the local test provider. The first real sign-in is the test.**
-- Cognito does not say in the sign-in token whether a second factor was used. The account page will therefore show "two-step verification: not reported". Enforcement is the user pool's MFA setting; keep it on *required*.
+- Cognito does not say in the sign-in token whether a second factor was used. The account page will therefore show "two-step verification: not reported". Enforcement is the user pool's setting, which the Terraform sets to required.
 - Signing out of the application ends the application's session. It does not end the Cognito browser session, so "sign in" straight afterwards may not ask for the password again.
+
+## 3. The shared proxy — you, once per server
+
+Ports 80 and 443 on the server are currently held by the Caddy inside the Hermes stack. They move to a proxy of their own, in its own repository: <https://github.com/StanislavEleninWeb/caddy>. Each project then joins the shared Docker network `edge` and installs one site file; deploying a project never restarts the proxy, and a broken site file is refused instead of taking the others down.
+
+- Installing the proxy and taking the ports over from Hermes is described in that repository (`README.md`, `docs/migrating-hermes.md`). **It has not been done, and it needs a small change in the Hermes repository** (the agents join the `edge` network, the `caddy` service is removed, the site block moves to a site file). The switch-over interrupts the agent dashboards for about a minute.
+- The CRM cannot go live before this is done: it publishes no ports of its own.
 
 ## 4. The server — you (I can give exact commands for each line)
 
-1. A user for deployments, e.g. `deploy`, in the `docker` group. Docker Engine with the Compose plugin installed.
+1. A user for deployments, e.g. `deploy`, in the `docker` group, allowed to write `/etc/edge/sites` (the site installer runs as this user). Docker Engine with the Compose plugin.
 2. Directories: `/opt/seweb-crm` (owned by `deploy`), `/etc/seweb-crm` (mode 0700), `/var/backups/seweb-crm`, `/var/lib/seweb-crm`.
 3. An SSH key pair for deployments: public half in `~deploy/.ssh/authorized_keys`, private half into GitHub (step 6).
-4. Put the three Cloudflare files in `/etc/seweb-crm/edge/` (`origin.pem`, `origin.key` mode 0600, `cloudflare-origin-pull-ca.pem`), readable by the user Caddy runs as.
-5. Add the site to the existing Caddy, which today belongs to the Hermes project: one line in its Caddyfile, `import /opt/seweb-crm/infra/production/Caddyfile.site`, then reload Caddy. That line is the only thing Hermes needs to know about the CRM; see "The proxy belongs to another project" below.
-   - **Caddy installed on the host:** nothing else. The CRM is deployed with `compose.host-proxy.yaml` and Caddy forwards to `127.0.0.1:18000` and `127.0.0.1:18080`.
-   - **Caddy in a container:** it cannot reach the host's loopback ports. Create a shared network once (`docker network create edge`), attach the Caddy container to it, mount `/etc/seweb-crm/edge` and `/opt/seweb-crm/infra/production/Caddyfile.site` read-only into it, and give it `CRM_API_UPSTREAM=crm-api:8000` and `CRM_FRONTEND_UPSTREAM=crm-frontend:8080`. The CRM is then deployed with `compose.shared-network.yaml` instead of `compose.host-proxy.yaml` (one line in `deploy.conf`).
+4. The three Cloudflare files from step 1 in `/etc/edge/certs/crm/`: `origin.pem`, `origin.key`, `cloudflare-origin-pull-ca.pem`. The proxy container reads them as root; keep the key mode 0600.
 
-## The proxy belongs to another project
-
-Ports 80 and 443 on this server are held by a Caddy that is part of Hermes. Two projects cannot both own those ports, so one proxy has to serve both. That does **not** require moving anything today:
-
-- **Now (smallest change):** Hermes keeps its Caddy and gains one `import` line. The CRM's routing, headers and certificate paths stay in this repository, in `Caddyfile.site`; the CRM's release never restarts or edits Hermes's Caddy.
-- **Later, if you want them independent:** move the proxy into its own small repository ("edge") that owns ports 80 and 443 and nothing else, with one imported site file per project and the shared `edge` Docker network. Then deploying Hermes cannot take the CRM offline, and the other way round. Worth doing when a third thing arrives or when Hermes deployments start to restart the proxy; not a precondition for the first CRM deployment.
-
-The one coupling that remains until then: if Hermes's Caddy is stopped or replaced, the CRM is unreachable too.
+The CRM's deployment then does the rest by itself: it joins the `edge` network and runs `edge-site install crm …` with the site file from this repository.
 
 ## 5. Settings files on the server — you type the secrets
 
@@ -105,10 +66,10 @@ All in `/etc/seweb-crm/`, mode 0600. Templates are in `infra/production/`.
 
 | File | From template | Contains |
 |---|---|---|
-| `env` | `env.example` | Public address, database URL for the runtime role, session secret, encryption key, erasure key, monitoring token, Cognito issuer/client/secret, S3 region/bucket/keys |
+| `env` | `env.example` | Public address, database URL for the runtime role, session secret, encryption key, erasure key, monitoring token; from `terraform output`: Cognito issuer, client and secret, S3 region and bucket; the application user's access key |
 | `db.env` | `db.env.example` | Database name and the three database passwords |
 | `migrate.env` | `migrate.env.example` | The schema owner's database URL. Read only by the migration job |
-| `deploy.conf` | `deploy.conf.example` | That the host's own proxy is used; the backup command with the backups bucket name |
+| `deploy.conf` | `deploy.conf.example` | That the shared proxy is used; the backup command with the backups bucket (`terraform output backups_uri`) |
 | `backup.pass` | — | `openssl rand -base64 32 > backup.pass`. **Keep a copy somewhere else**: without it backups cannot be read |
 | `backup-aws.env` | — | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` of the backup user |
 
@@ -143,7 +104,7 @@ After that I rehearse a restore from the S3 backup and a rollback to the previou
 
 - **Images are private.** The deployment logs in with the workflow's own token, so nothing needs setting; if the pull is refused, the package's access list in GitHub needs the repository added.
 - **Cognito redirect mismatch**: the callback URL must match exactly, including `https` and no trailing slash.
-- **Caddy cannot reach the loopback ports** if it runs in a container: see step 4.
+- **The deployment stops at "Install this application's site file"**: the shared proxy is not installed yet (step 3), or the three certificate files are missing from `/etc/edge/certs/crm/`. The application itself is already running at that point; only its public route is missing. Fix the cause and run the deployment again.
 - **Cloudflare shows error 525 or 526:** the origin certificate is missing, unreadable, or for another name, or the SSL mode is not "Full (strict)".
 - **Cloudflare shows error 520/502 and Caddy logs a TLS handshake failure:** Authenticated Origin Pulls is off in Cloudflare while the server requires it (or the CA file is wrong).
 - **A direct visit to `https://161.97.89.47` fails:** intended. Only Cloudflare can connect.
