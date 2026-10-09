@@ -13,6 +13,7 @@ from app.modules.billing.router import router as billing_router
 from app.modules.crm.companies_router import router as companies_router
 from app.modules.crm.records_router import router as records_router
 from app.modules.crm.sales_router import router as sales_router
+from app.modules.dataops.router import router as dataops_router
 from app.modules.discovery.router import router as discovery_router
 from app.modules.email.router import public_router as email_public_router
 from app.modules.email.router import router as email_router
@@ -22,6 +23,7 @@ from app.modules.identity.tenant_router import router as tenant_router
 from app.modules.integrations.router import router as integrations_router
 from app.modules.prospects.router import router as prospects_router
 from app.modules.providers.router import router as providers_router
+from app.modules.reports.router import router as reports_router
 from app.modules.research.router import router as research_router
 from app.modules.system.router import api_router as system_api_router
 from app.modules.system.router import router as health_router
@@ -72,6 +74,8 @@ def create_app() -> FastAPI:
     v1.include_router(unsubscribe_router)
     v1.include_router(integrations_router)
     v1.include_router(billing_router)
+    v1.include_router(reports_router)
+    v1.include_router(dataops_router)
     v1.include_router(billing_public_router)
     app.include_router(v1)
     return app

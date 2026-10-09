@@ -459,6 +459,12 @@ def promote_candidate(candidate_id: UUID, body: Promote, ctx: TenantContext = RE
     )
     if candidate["state"] not in ("needs_review", "qualified"):
         raise ConflictError("This candidate was already decided.")
+    from app.modules.dataops import service as dataops
+
+    if dataops.is_erased(
+        ctx.db, ctx.tenant_id, [("domain", candidate["domain"]), ("listing_id", candidate["listing_id"])]
+    ):
+        raise ConflictError("This business was erased on request and cannot be added again from research.")
     proposal = candidate["proposal"] or {}
     name = body.name or candidate["name"]
     if not name:

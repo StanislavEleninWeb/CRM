@@ -181,8 +181,11 @@ def switch_tenant(body: SwitchTenant, principal: CurrentPrincipal, db: UserSessi
         {"t": body.tenant_id, "u": principal.user_id},
     ).scalar_one_or_none()
     if not is_member:
-        # Same answer whether the workspace does not exist or the user is not a member.
-        raise PermissionDeniedError("You are not a member of that workspace.")
+        # Support access granted by the owner is the only other way in. Starting it is recorded in the workspace's audit log.
+        granted = db.execute(text("SELECT support_access_begin(:t)"), {"t": body.tenant_id}).scalar()
+        if not granted:
+            # Same answer whether the workspace does not exist or the user is not a member.
+            raise PermissionDeniedError("You are not a member of that workspace.")
     db.execute(
         text("UPDATE sessions SET active_tenant_id = :t WHERE id = :id"),
         {"t": body.tenant_id, "id": principal.session_id},

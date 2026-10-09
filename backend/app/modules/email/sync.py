@@ -274,6 +274,11 @@ def store_message(db: Session, tenant_id: UUID, mailbox: Any, raw: RawMessage) -
     direction = (
         "outbound" if "SENT" in raw.label_ids or from_address == str(mailbox["email_address"]).lower() else "inbound"
     )
+    from app.modules.dataops import service as dataops
+
+    parties = [("email", from_address), *[("email", a) for a in mime.addresses(headers.get("to"))]]
+    if dataops.is_erased(db, tenant_id, parties):
+        return 0  # this correspondent was erased on request: their mail is not brought back in
     subject = (headers.get("subject") or "")[:500]
     classification = "message"
     if direction == "inbound":

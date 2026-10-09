@@ -50,10 +50,17 @@ class TenantContext:
     role: Role
     permissions: frozenset[Permission]
     db: Session
+    support: bool = False
+    support_communications: bool = False
 
     @property
     def user_id(self) -> UUID:
         return self.principal.user_id
+
+    def require_communications(self) -> None:
+        """Email conversations and drafts are closed to support access unless the owner included them."""
+        if self.support and not self.support_communications:
+            raise PermissionDeniedError("This support access does not include communications.")
 
     def require_person(self, what: str) -> None:
         """For decisions that record a person's judgement or loosen a restriction: never an API key."""
@@ -155,6 +162,29 @@ def get_tenant_context(principal: CurrentPrincipal, request: Request) -> Iterato
             text("SELECT role FROM memberships WHERE tenant_id = :t AND user_id = :u"),
             {"t": principal.active_tenant_id, "u": principal.user_id},
         ).scalar_one_or_none()
+        support = None
+        if role is None and principal.api_key_id is None:
+            # Not a member: the only other way in is support access the owner granted, and only while it lasts.
+            support = session.execute(
+                text(
+                    "SELECT include_communications FROM support_grants WHERE tenant_id = :t AND grantee_user_id = :u "
+                    "AND revoked_at IS NULL AND expires_at > now() ORDER BY expires_at DESC LIMIT 1"
+                ),
+                {"t": principal.active_tenant_id, "u": principal.user_id},
+            ).one_or_none()
+        if support is not None:
+            if request.method not in SAFE_METHODS:
+                raise PermissionDeniedError("Support access is read-only.")
+            yield TenantContext(
+                principal=principal,
+                tenant_id=principal.active_tenant_id,
+                role=Role.READ_ONLY,
+                permissions=frozenset({Permission.CRM_READ, Permission.REPORTS_READ}),
+                db=session,
+                support=True,
+                support_communications=bool(support.include_communications),
+            )
+            return
         if role is None:
             raise PermissionDeniedError("You are no longer a member of this workspace.")
         resolved = Role(role)

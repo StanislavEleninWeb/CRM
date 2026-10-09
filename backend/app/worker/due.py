@@ -55,6 +55,10 @@ def _load_builtin_handlers() -> None:
     from app.modules.billing import service as billing
 
     _handlers.setdefault(billing.DUE_KIND, billing.reconcile_handler)
+    from app.modules.dataops import service as dataops
+
+    _handlers.setdefault(dataops.PURGE_KIND, dataops.purge_handler)
+    _handlers.setdefault(dataops.DELETE_KIND, dataops.delete_handler)
     _builtin_loaded = True
 
 

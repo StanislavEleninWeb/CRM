@@ -588,6 +588,7 @@ def list_threads(
     needs_review: bool = False,
 ) -> Page[ThreadOut]:
     """Conversations for a record, or the review queue of replies that could not be matched to one."""
+    ctx.require_communications()
     condition = "true"
     typed: dict[str, Any] = {}
     if lead_id:
@@ -757,6 +758,7 @@ def create_draft(body: DraftIn, ctx: TenantContext = DRAFT) -> DraftOut:
 
 @router.get("/email-drafts", response_model=list[DraftOut], operation_id="listEmailDrafts", tags=["email"])
 def list_drafts(ctx: TenantContext = READ, lead_id: UUID | None = None) -> list[DraftOut]:
+    ctx.require_communications()
     condition = "lead_id = :l" if lead_id else "status IN ('draft', 'approved', 'queued')"
     ids = many(
         ctx,
@@ -768,6 +770,7 @@ def list_drafts(ctx: TenantContext = READ, lead_id: UUID | None = None) -> list[
 
 @router.get("/email-drafts/{draft_id}", response_model=DraftOut, operation_id="getEmailDraft", tags=["email"])
 def get_draft(draft_id: UUID, ctx: TenantContext = READ) -> DraftOut:
+    ctx.require_communications()
     return _draft(ctx, draft_id)
 
 

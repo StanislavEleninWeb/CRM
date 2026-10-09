@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.normalize import domain_of, normalize_email, normalize_phone, normalize_url
+from app.modules.dataops import service as dataops
 from app.modules.research import parsing
 from app.modules.research.scoring import Rubric, ScoreError, compute_score
 from app.modules.research.workbook import ParsedWorkbook
@@ -611,6 +612,17 @@ def commit_import(db: Session, tenant_id: UUID, import_id: UUID, actor_id: UUID 
                 lead_id, company_id = found.id, found.company_id
 
         created = lead_id is None
+        if created and dataops.is_erased(
+            db,
+            tenant_id,
+            [("external_id", data["external_id"]), ("domain", company.get("domain")),
+             *[("email", c.get("normalized_value")) for c in data.get("channels", []) if c.get("kind") == "email"]],
+        ):  # fmt: skip
+            result["skipped"] += 1
+            result["erased_skipped"] = (
+                result.get("erased_skipped", 0) + 1
+            )  # erased on request: an import does not bring it back
+            continue
         if created:
             company_id = db.execute(
                 text(
