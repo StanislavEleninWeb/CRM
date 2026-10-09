@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 
+from app.core import outbox
 from app.core.deps import TenantContext, tenant_with
 from app.core.errors import ConflictError
 from app.core.normalize import normalize_email
@@ -763,6 +764,19 @@ def _apply_outcome(ctx: TenantContext, attempt: RowMapping, body: CallOutcome) -
             "dialler_opened": attempt["launched_at"] is not None,
             "follow_up_at": body.follow_up_at,
             "source": "user_reported",
+        },
+    )
+    outbox.emit(
+        ctx.db,
+        ctx.tenant_id,
+        "call.outcome_reported",
+        subject_type="call_attempt",
+        subject_id=attempt["id"],
+        payload={
+            "outcome": body.outcome,
+            "lead_id": lead_id,
+            "company_id": company_id,
+            "follow_up_at": body.follow_up_at,
         },
     )
     return CallAttemptOut(**updated)

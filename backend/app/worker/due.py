@@ -49,6 +49,9 @@ def _load_builtin_handlers() -> None:
     from app.modules.email import dispatch
 
     _handlers.setdefault(dispatch.DUE_KIND, dispatch.send_handler)
+    from app.modules.integrations import webhooks
+
+    _handlers.setdefault(webhooks.DUE_KIND, webhooks.deliver_handler)
     _builtin_loaded = True
 
 

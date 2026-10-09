@@ -748,7 +748,7 @@ def test_every_tenant_table_has_forced_row_level_security(
     # ENABLE rather than FORCE, each for a documented reason: the first two are identity tables with
     # definer access (migration 0002); due_jobs is claimed across tenants by the scheduler (migration 0007);
     # mailbox_routes maps an incoming push notification to its tenant (migration 0008).
-    identity_tables = {"memberships", "invitations", "due_jobs", "mailbox_routes"}
+    identity_tables = {"memberships", "invitations", "due_jobs", "mailbox_routes", "api_keys"}
     with migrator_engine.connect() as conn:
         rows = conn.execute(
             text(

@@ -87,9 +87,9 @@ def log_activity(
     ctx.db.execute(
         text(
             """
-            INSERT INTO activities (tenant_id, kind, summary, actor_user_id, origin, correlation_id,
+            INSERT INTO activities (tenant_id, kind, summary, actor_user_id, actor_type, origin, correlation_id,
                                     data, company_id, contact_id, lead_id, deal_id)
-            VALUES (:tenant_id, :kind, :summary, :actor, :origin, :correlation_id,
+            VALUES (:tenant_id, :kind, :summary, :actor, :actor_type, :origin, :correlation_id,
                     CAST(:data AS jsonb), :company_id, :contact_id, :lead_id, :deal_id)
             """
         ),
@@ -98,7 +98,8 @@ def log_activity(
             "kind": kind,
             "summary": summary[:500],
             "actor": ctx.user_id,
-            "origin": origin,
+            "actor_type": "integration" if ctx.principal.api_key_id else "user",
+            "origin": "api_key" if ctx.principal.api_key_id and origin == "api" else origin,
             "correlation_id": structlog.contextvars.get_contextvars().get("correlation_id"),
             "data": json.dumps(data or {}, default=str),
             "company_id": company_id,

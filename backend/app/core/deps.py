@@ -17,6 +17,7 @@ from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core import apikeys
 from app.core.config import get_settings
 from app.core.db import RlsContext, session_scope
 from app.core.errors import PermissionDeniedError, UnauthenticatedError
@@ -29,13 +30,15 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 @dataclass(frozen=True)
 class Principal:
-    """An authenticated browser session."""
+    """An authenticated browser session, or an API key acting as the member who created it."""
 
     user_id: UUID
     session_id: UUID
     active_tenant_id: UUID | None
     csrf_token: str
     mfa_claimed: bool
+    api_key_id: UUID | None = None
+    scopes: frozenset[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -94,7 +97,28 @@ def lookup_session(token: str) -> Principal | None:
     )
 
 
+def _key_principal(request: Request, token: str) -> Principal:
+    identity = apikeys.authenticate(token)
+    if identity is None:
+        raise UnauthenticatedError("The API key is not valid, has expired or was revoked.")
+    apikeys.check_rate(get_redis(), identity)
+    request.state.api_key = identity
+    return Principal(
+        user_id=identity.acting_user_id,
+        session_id=identity.key_id,
+        active_tenant_id=identity.tenant_id,
+        csrf_token="",
+        mfa_claimed=False,
+        api_key_id=identity.key_id,
+        scopes=identity.scopes,
+    )
+
+
 def get_principal(request: Request) -> Principal:
+    authorization = request.headers.get("Authorization", "")
+    if authorization[:7].lower() == "bearer " and apikeys.looks_like_key(authorization[7:].strip()):
+        # A key never rides on a browser session: no cookie is read and no CSRF token applies.
+        return _key_principal(request, authorization[7:].strip())
     token = request.cookies.get(SESSION_COOKIE)
     principal = lookup_session(token) if token else None
     if principal is None:
@@ -111,6 +135,8 @@ CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
 
 def get_user_session(principal: CurrentPrincipal) -> Iterator[Session]:
     """A transaction that acts as the user, with no tenant selected."""
+    if principal.api_key_id is not None:
+        raise PermissionDeniedError("This action needs a signed-in person, not an API key.")
     with session_scope(RlsContext(user_id=principal.user_id)) as session:
         yield session
 
@@ -127,11 +153,18 @@ def get_tenant_context(principal: CurrentPrincipal) -> Iterator[TenantContext]:
         if role is None:
             raise PermissionDeniedError("You are no longer a member of this workspace.")
         resolved = Role(role)
+        if principal.api_key_id is not None:
+            # Carried on the session so every audit entry written in this request names the key.
+            session.info["api_key_id"] = str(principal.api_key_id)
+        granted = permissions_for(resolved)
+        if principal.scopes is not None:
+            # A key holds its scopes, capped by what keys may ever do and by its creator's role today.
+            granted = frozenset(p for p in granted if p in apikeys.ALLOWED_SCOPES and p.value in principal.scopes)
         yield TenantContext(
             principal=principal,
             tenant_id=principal.active_tenant_id,
             role=resolved,
-            permissions=permissions_for(resolved),
+            permissions=granted,
             db=session,
         )
 

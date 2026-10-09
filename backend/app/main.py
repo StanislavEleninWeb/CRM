@@ -5,6 +5,7 @@ from fastapi.routing import APIRoute
 
 from app.core.config import get_settings
 from app.core.errors import ErrorEnvelope, register_error_handlers
+from app.core.idempotency import IdempotencyMiddleware
 from app.core.logging import configure_logging
 from app.core.middleware import CorrelationMiddleware
 from app.modules.crm.companies_router import router as companies_router
@@ -16,6 +17,7 @@ from app.modules.email.router import router as email_router
 from app.modules.email.unsubscribe import router as unsubscribe_router
 from app.modules.identity.auth_router import router as auth_router
 from app.modules.identity.tenant_router import router as tenant_router
+from app.modules.integrations.router import router as integrations_router
 from app.modules.prospects.router import router as prospects_router
 from app.modules.providers.router import router as providers_router
 from app.modules.research.router import router as research_router
@@ -46,6 +48,8 @@ def create_app() -> FastAPI:
             422: {"model": ErrorEnvelope},
         },
     )
+    # Added first so it runs inside the correlation middleware.
+    app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(CorrelationMiddleware)
     register_error_handlers(app)
 
@@ -64,6 +68,7 @@ def create_app() -> FastAPI:
     v1.include_router(email_router)
     v1.include_router(email_public_router)
     v1.include_router(unsubscribe_router)
+    v1.include_router(integrations_router)
     app.include_router(v1)
     return app
 

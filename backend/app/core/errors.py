@@ -29,10 +29,13 @@ class AppError(Exception):
     status_code = 400
     code = "bad_request"
 
-    def __init__(self, message: str, *, details: list[dict[str, Any]] | None = None) -> None:
+    def __init__(
+        self, message: str, *, details: list[dict[str, Any]] | None = None, headers: dict[str, str] | None = None
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.details = details
+        self.headers = headers
 
 
 class NotFoundError(AppError):
@@ -53,6 +56,11 @@ class UnauthenticatedError(AppError):
 class ConflictError(AppError):
     status_code = 409
     code = "conflict"
+
+
+class RateLimitedError(AppError):
+    status_code = 429
+    code = "rate_limited"
 
 
 class ServiceUnavailableError(AppError):
@@ -86,7 +94,10 @@ def _response(status: int, code: str, message: str, details: list[dict[str, Any]
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(_request: Request, exc: AppError) -> JSONResponse:
-        return _response(exc.status_code, exc.code, exc.message, exc.details)
+        response = _response(exc.status_code, exc.code, exc.message, exc.details)
+        for name, value in (exc.headers or {}).items():
+            response.headers[name] = value
+        return response
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_request: Request, exc: StarletteHTTPException) -> JSONResponse:

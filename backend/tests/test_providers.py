@@ -181,7 +181,8 @@ def test_credentials_are_write_only(
 
 def test_no_read_schema_exposes_a_secret_field(client: TestClient) -> None:
     schema = client.get(f"{API}/openapi.json").json()
-    write_only = {"ConnectionIn", "CredentialIn", "InvitationAccept", "InvitationCreated"}
+    # Inputs, and the two "shown once at creation" responses.
+    write_only = {"ConnectionIn", "CredentialIn", "InvitationAccept", "InvitationCreated", "EndpointCreated"}
     suspicious = ("secret", "ciphertext", "nonce", "password", "token_hash", "credential", "api_key", "private_key")
     allowed = {"has_credential", "credential_hint", "csrf_token"}
     offenders = []

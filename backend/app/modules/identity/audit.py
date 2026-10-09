@@ -22,6 +22,10 @@ def record_audit(
     origin: str = "api",
 ) -> None:
     correlation_id = structlog.contextvars.get_contextvars().get("correlation_id")
+    api_key_id = db.info.get("api_key_id")
+    if api_key_id and actor_type == "user":
+        # Done through an API key: say so, and which one.
+        actor_type, data = "integration", {**(data or {}), "api_key_id": api_key_id}
     db.execute(
         text(
             """

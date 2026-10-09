@@ -709,6 +709,16 @@ def _finish(db: Session, tenant_id: UUID, run_id: UUID, status: str, stop_reason
         ),
         {"s": status, "sum": json.dumps(summary), "r": run_id},
     )
+    from app.core import outbox
+
+    outbox.emit(
+        db,
+        tenant_id,
+        "research_run.finished",
+        subject_type="research_run",
+        subject_id=run_id,
+        payload={"status": status, "stop_reason": stop_reason, "qualified": qualified, "requested": target},
+    )
     return status
 
 

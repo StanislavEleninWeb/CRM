@@ -1,4 +1,4 @@
-"""Re-encrypt every stored provider credential with the current key version.
+"""Re-encrypt every stored secret (provider credentials, mailbox tokens, webhook secrets) with the current key version.
 
 Key rotation procedure:
   1. Generate a new key and put it FIRST in SECRET_ENCRYPTION_KEYS, keeping the old one after it.
@@ -18,6 +18,20 @@ from app.core.config import get_settings
 from app.core.db import RlsContext, session_scope
 from app.core.secrets import Sealed, SecretError, get_keyring
 
+# Every place a secret is stored: table, the columns holding it, and the "provider" it is bound to.
+SOURCES = (
+    ("provider_connections", "secret_ciphertext", "secret_nonce", "secret_key_version", "provider"),
+    ("mailboxes", "token_ciphertext", "token_nonce", "token_key_version", "provider"),
+    ("webhook_endpoints", "secret_ciphertext", "secret_nonce", "secret_key_version", "'webhook'"),
+    (
+        "webhook_endpoints",
+        "previous_secret_ciphertext",
+        "previous_secret_nonce",
+        "previous_secret_key_version",
+        "'webhook'",
+    ),
+)
+
 
 def reseal_all() -> dict[str, int]:
     settings = get_settings()
@@ -31,35 +45,39 @@ def reseal_all() -> dict[str, int]:
     engine.dispose()
     counts = {"resealed": 0, "already_current": 0, "unreadable": 0}
     for tenant_id in tenants:
-        with session_scope(RlsContext(tenant_id=UUID(str(tenant_id)))) as db:
-            rows = db.execute(
-                text(
-                    "SELECT id, provider, secret_ciphertext, secret_nonce, secret_key_version FROM provider_connections "
-                    "WHERE tenant_id = :t AND secret_ciphertext IS NOT NULL FOR UPDATE"
-                ),
-                {"t": tenant_id},
-            ).all()
-            for row in rows:
-                if row.secret_key_version == current:
-                    counts["already_current"] += 1
-                    continue
-                scope = {"tenant_id": tenant_id, "provider": row.provider, "connection_id": row.id}
-                try:
-                    plain = ring.open(
-                        Sealed(bytes(row.secret_ciphertext), bytes(row.secret_nonce), row.secret_key_version), **scope
-                    )
-                except SecretError:
-                    counts["unreadable"] += 1  # the old key is missing; the connection must be reconnected
-                    continue
-                sealed = ring.seal(plain, **scope)
-                db.execute(
+        for table, cipher, nonce, version, provider in SOURCES:
+            with session_scope(RlsContext(tenant_id=UUID(str(tenant_id)))) as db:
+                rows = db.execute(
                     text(
-                        "UPDATE provider_connections SET secret_ciphertext = :c, secret_nonce = :n, secret_key_version = :v "
-                        "WHERE tenant_id = :t AND id = :id"
+                        f"SELECT id, {provider} AS provider, {cipher} AS ciphertext, {nonce} AS nonce, {version} AS key_version "
+                        f"FROM {table} WHERE tenant_id = :t AND {cipher} IS NOT NULL FOR UPDATE"
                     ),
-                    {"c": sealed.ciphertext, "n": sealed.nonce, "v": sealed.key_version, "t": tenant_id, "id": row.id},
-                )
-                counts["resealed"] += 1
+                    {"t": tenant_id},
+                ).all()
+                for row in rows:
+                    if row.key_version == current:
+                        counts["already_current"] += 1
+                        continue
+                    scope = {"tenant_id": tenant_id, "provider": row.provider, "connection_id": row.id}
+                    try:
+                        plain = ring.open(Sealed(bytes(row.ciphertext), bytes(row.nonce), row.key_version), **scope)
+                    except SecretError:
+                        counts["unreadable"] += 1  # the old key is missing; it has to be entered or connected again
+                        continue
+                    sealed = ring.seal(plain, **scope)
+                    db.execute(
+                        text(
+                            f"UPDATE {table} SET {cipher} = :c, {nonce} = :n, {version} = :v WHERE tenant_id = :t AND id = :id"
+                        ),
+                        {
+                            "c": sealed.ciphertext,
+                            "n": sealed.nonce,
+                            "v": sealed.key_version,
+                            "t": tenant_id,
+                            "id": row.id,
+                        },
+                    )
+                    counts["resealed"] += 1
     return counts
 
 
