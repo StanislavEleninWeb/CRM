@@ -42,8 +42,8 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 
 | Gate | Status |
 |---|---|
-| Scoped API keys and idempotency | NOT_STARTED |
-| Signed webhooks with replay safety | NOT_STARTED |
+| Scoped API keys and idempotency | PASS (local) |
+| Signed webhooks with replay safety | PASS (local, mocked receiver). Delivery to a real external receiver has not been exercised |
 | Billing lifecycle in Stripe test mode | BLOCKED — account and plans (U-08) |
 | Entitlements enforced on the server | NOT_STARTED |
 | Retention, export, deletion, support access | NOT_STARTED |

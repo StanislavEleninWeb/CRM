@@ -13,6 +13,13 @@ const TENANT = { id: "tenant-a", name: "SEWEB" };
 const me = (permissions: string[]) => () => json(makeMe({ active: { ...TENANT, permissions: ["crm.read", ...permissions] } }));
 const page = <T,>(items: T[]) => ({ items, total: items.length, limit: 50, offset: 0 });
 
+const accessRoutes = {
+  "GET /api/v1/api-keys": () => json([]),
+  "GET /api/v1/api-keys/scopes": () => json([{ name: "crm.read", grantable: true }]),
+  "GET /api/v1/webhook-endpoints": () => json([]),
+  "GET /api/v1/webhook-deliveries": () => json({ items: [], total: 0, limit: 20, offset: 0 }),
+};
+
 function renderAt(path: string) {
   return render(
     <QueryClientProvider client={createQueryClient()}>
@@ -370,6 +377,7 @@ describe("mailbox on the integrations page", () => {
       "GET /api/v1/mailboxes/gmail/availability": () =>
         json({ available: false, reason: "Gmail is not configured on this installation.", internal_domain: null }),
       "GET /api/v1/provider-adapters": () => json([]),
+      ...accessRoutes,
       "GET /api/v1/provider-connections": () => json([]),
       "GET /api/v1/budgets": () => json([]),
       "GET /api/v1/usage/summary": () =>

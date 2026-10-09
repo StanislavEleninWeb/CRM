@@ -96,3 +96,20 @@ Each mailbox has a daily limit (default 50) and a minimum gap between messages (
 1. Complete the Gmail steps above and the outreach-rule approval in the Email page.
 2. Set `EMAIL_DISPATCH=dry_run`, send one message to an address you control, and confirm it ends as "Dry run finished".
 3. Set `EMAIL_DISPATCH=live`, send the same message, reply to it, and confirm the reply appears on the prospect. Record the result in `docs/test-evidence.md`.
+
+## Inbound callbacks
+
+A provider callback is trusted only after its own verification, and it is mapped to a tenant by data this application stored, never by anything in the callback.
+
+| Callback | Verification | Tenant mapping | Status |
+|---|---|---|---|
+| Gmail push (`/api/v1/webhooks/gmail`) | Google-signed OIDC token: issuer, audience and service account | The mailbox address looked up in `mailbox_routes`; the history ID in the message is never used as data | IMPLEMENTED, tested with a local signer |
+| Stripe (`/api/v1/webhooks/stripe`) | Signature over the raw body | Customer and subscription IDs stored at checkout | Not built yet (phase 11) |
+
+## API keys and outbound webhooks
+
+See `examples/api/README.md` for use. Operational notes:
+
+- Keys and webhook signing secrets are shown once. A lost key is revoked and replaced; a lost secret is rotated (the old one stays valid for 24 hours).
+- Webhook secrets are encrypted with `SECRET_ENCRYPTION_KEYS`; the rotation command re-encrypts them along with provider credentials and mailbox tokens.
+- Outbound deliveries only go to public addresses over HTTPS (plain HTTP is accepted in development and test only). The address is resolved and checked at every delivery, and the connection is made to the address that was checked.

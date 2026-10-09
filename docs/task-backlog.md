@@ -98,10 +98,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-100 | Scoped keys | Read-only key cannot mutate; revoked and expired keys fail | TODO |
-| CRM-101 | Public API | Idempotency conflicts rejected | TODO |
-| CRM-102 | Outbox and webhooks | Signatures reject tampering; replay does not duplicate | TODO |
-| CRM-103 | Hermes examples | Examples run against local with synthetic records | TODO |
+| CRM-100 | Scoped keys | Read-only key cannot mutate; revoked and expired keys fail | DONE |
+| CRM-101 | Public API | Idempotency conflicts rejected | DONE |
+| CRM-102 | Outbox and webhooks | Signatures reject tampering; replay does not duplicate | DONE (mocked receiver; no real receiver contacted) |
+| CRM-103 | Hermes examples | Examples run against local with synthetic records | DONE (`infra/e2e/phase_c_api.py`, 16 checks) |
 
 ## Phase 11 — subscriptions and entitlements (P2, depends on 06, 10)
 

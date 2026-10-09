@@ -3,6 +3,7 @@ import { type FormEvent, useId, useState } from "react";
 
 import { api, type Schemas, unwrap } from "../api/client";
 import { tenantKey, useAuth, useTenantQuery } from "../auth/AuthContext";
+import { ApiKeys, Webhooks } from "./ApiAccess";
 import { EmptyState, ErrorState, Loading } from "../components/States";
 import { formatDateTime, formatMoney } from "../lib/format";
 
@@ -15,6 +16,8 @@ export function IntegrationsPage() {
       <h1>Integrations and spend</h1>
       <Mailboxes />
       {can("integrations.manage") ? <Connections /> : null}
+      {can("integrations.manage") ? <ApiKeys /> : null}
+      {can("integrations.manage") ? <Webhooks /> : null}
       <Budgets />
       <Usage />
     </>

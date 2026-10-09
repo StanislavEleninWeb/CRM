@@ -344,3 +344,40 @@ What is covered:
 - A domain-wide suppression is not serialised against an in-flight final check (see `outreach-policy.md`).
 - Events are written to the outbox but nothing delivers them yet (phase 10).
 - A send that fails or is blocked returns the draft for re-approval; there is no one-click retry by design.
+
+## Phase 10 — 9 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 322 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 31 tests passed |
+| `docker compose exec api python /infra/e2e/phase_c_api.py` on a fresh stack | 16 checks passed: the documented examples over real HTTP with only an API key, synthetic records |
+
+**No external system was contacted.** Webhook delivery was tested against a mocked receiver inside the test process and, for the address guard, against the real guarded network client with a controlled resolver. No delivery has been made to a real external server.
+
+What is covered:
+
+- **Keys.** Shown once; only a hash and a six-character prefix are stored; absent from lists and the audit log. A read-only key gets 403 on fifteen different writes and administrative reads, including sending, approving, key and webhook management, credentials, audit, sign-in details, creating a workspace, inviting an owner and changing settings.
+- **Scope ceiling.** Eight scopes can be granted. Ownership, membership, settings, billing, credentials, approval, audit, deletion and export are refused for any key. Only an administrator manages keys.
+- **Attribution.** Activities and audit entries written through a key say so and name the key.
+- **Lifecycle.** Malformed, altered, expired and revoked keys get 401. A key never exceeds its creator: demoting the creator removes write access; removing the creator stops the key.
+- **Tenant binding.** A tenant named in a header or query is ignored; in a body it is rejected. Another tenant cannot see or revoke the key.
+- **Rate limit.** Per key, per minute, with `Retry-After`; another key is unaffected.
+- **Idempotency.** The same request with the same key returns the first answer and creates one record. A different body, path or query with that key is `idempotency_conflict`. A refusal is replayed too. The key string is scoped to the API key. A request whose outcome was never recorded is refused, not rerun. Six simultaneous identical requests create one record.
+- **Webhook addresses.** Fourteen internal, credential-bearing, wrong-scheme and wrong-port addresses are refused; plain HTTP is refused outside development. A public name that resolves to an internal address is looked up and then not connected to.
+- **Signing.** The signature verifies with the right secret and fails for a changed body, a wrong secret, a missing or changed timestamp, and a stale delivery.
+- **Transactional events.** An event emitted in a transaction that rolls back leaves no event and no delivery. A call outcome reported through the API reaches the endpoints subscribed to it, with one event ID, and not a paused endpoint.
+- **Retries and replay.** Seven failures (500, timeout, a redirect to the cloud metadata address, connection refused, 404, 503, 500) follow the documented schedule from the database and end as dead. The redirect is not followed. A replay sends the same event ID; no event or delivery row is duplicated.
+- **Secret rotation.** For 24 hours deliveries verify with both secrets, afterwards only the new one. The encryption-key rotation command covers webhook secrets.
+- **Isolation.** Another tenant gets 404 on every webhook action; an event in one tenant creates no delivery in another.
+- **Examples.** The six documented calls run over HTTP against the local stack; a key cannot approve, cannot raise a research run's limits, a read-only key cannot update, a revoked key stops at once.
+
+**Limitations:**
+
+- The rate limit is a fixed one-minute window per key; a burst across a minute boundary can reach twice the limit.
+- Idempotency records are not yet purged (planned with retention in phase 12).
+- If the server stops after doing the work but before recording the answer, that key answers `idempotency_in_progress` from then on; the client must read the state. This is the documented trade-off for never running a request twice.
+- The key-rotation script previously covered provider credentials only; it now also covers mailbox tokens and webhook secrets. Only the webhook part has its own test.
+- Event coverage is small: email sends, call outcomes, research run finished, and a test event.
+- No MCP server is provided; the build pack lists it as optional and later.

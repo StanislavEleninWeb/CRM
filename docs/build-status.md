@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core`; pull request StanislavEleninWeb/CRM#2 holds phases 00–08 (first commit); later commits are local until the owner asks for a push |
-| Last completed phase | 09 (releases A and B implemented; B live gates blocked) |
-| Next action | Phase 10: scoped API keys, idempotency, signed webhooks from the outbox, Hermes examples |
+| Last completed phase | 10 (releases A and B implemented; B live gates blocked; commercial core in progress) |
+| Next action | Phase 11: plans, entitlements and Stripe test-mode billing (account and prices needed, U-08); CRM-114 external Gmail gate |
 
 ## Phases
 
@@ -25,7 +25,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 07 AI research | DONE except refresh mode | see `git log` (`Phase 07`) | Synthetic runs only. Live research BLOCKED (U-03, U-04). Open: refresh-existing mode (CRM-074), multi-page inspection |
 | 08 Internal Gmail and eligibility | DONE | see `git log` (`Phase 08`) | Stand-ins only. Live Gmail BLOCKED (U-02); live unsolicited email BLOCKED (U-06). Nothing can be sent yet |
 | 09 Reliable manual sends | DONE | see `git log` (`Phase 09`) | Sending is `off` by default. Verified with a fake mailbox only; no email has ever been sent |
-| 10 Public API, webhooks, Hermes | TODO | — | |
+| 10 Public API, webhooks, Hermes | DONE | see `git log` (`Phase 10`) | Webhook delivery verified against a mocked receiver only |
 | 11 Subscriptions and entitlements | TODO | — | |
 | 12 Reporting and operational controls | TODO | — | |
 | 13 Staging and deployment pipeline | TODO | — | |
@@ -85,3 +85,6 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - `unknown` is never returned to `queued` by code; only finding the message in the mailbox or a person's recorded decision ends it. `dispatching` returns to `queued` in exactly one case: the provider answered with a definite "slow down" refusal, so the message was not sent.
 - Lock order for anything touching a recipient's sends: the recipient advisory lock (`eligibility.lock_recipient`) first, then `send_intents`, `email_drafts`, `mailboxes`.
 - Events are written with `app.core.outbox.emit` in the same transaction as the change.
+- An API key authenticates with `Authorization: Bearer crm_…` and goes through the same `tenant_with(permission)` checks as a person; `app.core.apikeys.ALLOWED_SCOPES` is the complete list of what a key can hold. New endpoints need no extra work to be key-safe, but a new permission is not available to keys until it is added there on purpose.
+- Anything written for a request made with a key is attributed through `session.info["api_key_id"]`, not through request-local context (dependencies and handlers run on different worker threads).
+- New event types are added to `webhooks.KNOWN_EVENTS` and emitted with `outbox.emit` inside the transaction that makes the change.

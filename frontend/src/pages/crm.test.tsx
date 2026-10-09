@@ -11,6 +11,13 @@ const TENANT = { id: "tenant-a", name: "SEWEB" };
 const PERMISSIONS = ["crm.read", "crm.write", "members.read"];
 const me = () => json(makeMe({ active: { ...TENANT, permissions: PERMISSIONS } }));
 
+const accessRoutes = {
+  "GET /api/v1/api-keys": () => json([]),
+  "GET /api/v1/api-keys/scopes": () => json([{ name: "crm.read", grantable: true }]),
+  "GET /api/v1/webhook-endpoints": () => json([]),
+  "GET /api/v1/webhook-deliveries": () => json({ items: [], total: 0, limit: 20, offset: 0 }),
+};
+
 function renderAt(path: string) {
   return render(
     <QueryClientProvider client={createQueryClient()}>
@@ -417,6 +424,7 @@ describe("integrations page", () => {
       ...mailboxRoutes,
       "GET /api/v1/provider-adapters": () =>
         json([{ name: "fake_model", purpose: "model", label: "Local test model (not a real provider)", access_modes: ["byok"], is_local_test_adapter: true }]),
+      ...accessRoutes,
       "GET /api/v1/provider-connections": () =>
         json([
           {
