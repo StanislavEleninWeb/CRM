@@ -1,0 +1,77 @@
+[project]
+name = "seweb-crm"
+version = "0.1.0"
+description = "Multi-tenant B2B sales CRM"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "celery[redis]>=5.5",
+    "redis>=5.2",
+    "structlog>=24.4",
+    "pyjwt[crypto]>=2.10",
+    "cryptography>=43",
+    "httpx>=0.27",
+    "boto3>=1.35",
+    "python-multipart>=0.0.12",
+    "openpyxl>=3.1",
+    "defusedxml>=0.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+# The source tree is a read-only bind mount for the container user in CI; caches go elsewhere.
+cache-dir = "/tmp/ruff_cache"
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+# S608: SQL is assembled only from fixed identifiers and whitelisted fragments; values are always bound.
+# RUF001-003: Cyrillic text is expected in this product.
+ignore = ["S101", "E501", "S608", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["app.core.deps.tenant_with", "fastapi.Depends", "fastapi.Query"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S104", "S105", "S106", "S608", "RUF059"]
+"migrations/**" = ["S608", "E501"]
+
+[tool.mypy]
+cache_dir = "/tmp/mypy_cache"
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "kombu.*", "boto3.*", "botocore.*", "openpyxl.*", "defusedxml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["app.worker.*", "app.modules.*.tasks"]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+cache_dir = "/tmp/pytest_cache"
+testpaths = ["tests"]
+markers = [
+    "reference_fixture: needs the private reference workbook; skipped when it is absent",
+]
+addopts = "-ra --show-capture=no --tb=short"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

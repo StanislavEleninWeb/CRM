@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "crm-local",
+      "credentials": [{ "accessKey": "change-me-access", "secretKey": "change-me-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

@@ -45,7 +45,8 @@ The Google Places API terms are specific:
 
 - **Maps Platform Terms §3.2.3(a):** the customer will not "copy and save business names, addresses, or user reviews".
 - **Service Specific Terms §14.3:** only latitude/longitude may be cached, for 30 days. `place_id` may be stored indefinitely.
-- **Change:** store `place_id`, take identity and contact fields from the business's own website, and refetch review counts at scoring time instead of storing them. The workbook already works this way: all 94 Maps URLs are `place_id` links.
+- **Change:** store `place_id`, take identity and contact fields from the business's own website, and refetch review counts at scoring time instead of storing them.
+- **Correction (8 October 2026):** the workbook has 79 `place_id` links and 15 `cid` links, not 94 `place_id` links. These are the global terms; an account billed in Bulgaria falls under the EEA terms, which were not fetched, so this rule is unverified for SEWEB. See `decisions.md`.
 - **Not verified:** the terms that apply to a scraping provider (for example Apify). Check them before the scraping phase.
 
 ### 5. Bulgarian law requires three product features, not just a footnote

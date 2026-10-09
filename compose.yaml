@@ -1,0 +1,134 @@
+# Local development stack. Not a production configuration: see infra/ for that.
+name: seweb-crm
+
+x-backend: &backend
+  # One image for the API, worker, scheduler and migration job, so they can never drift apart.
+  image: seweb-crm-backend:dev
+  build:
+    context: ./backend
+    target: dev
+  env_file: [.env]
+  volumes:
+    - ./backend:/app
+    - ./tests/fixtures:/fixtures:ro
+    - ./infra:/infra:ro
+    # Read-only view of the repository, used by the test that checks no private data was committed.
+    - .:/repo:ro
+  depends_on:
+    db: {condition: service_healthy}
+    redis: {condition: service_healthy}
+    oidc: {condition: service_healthy}
+    storage: {condition: service_healthy}
+  networks: [internal]
+
+services:
+  db:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MIGRATOR_PASSWORD: ${MIGRATOR_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  oidc:
+    # Development and test identity provider only (static users, in-memory storage).
+    image: ghcr.io/dexidp/dex:v2.46.0@sha256:933fcd3f523338c847b88ef84a7145fb2fcb7b9917f08418612afeaaa2001777
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./infra/dex/config.dev.yaml:/etc/dex/config.yaml:ro
+    ports: ["127.0.0.1:5556:5556"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:5556/dex/.well-known/openid-configuration"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  storage:
+    # S3-compatible object storage for local development and tests.
+    image: chrislusf/seaweedfs@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-s3", "-s3.port=9000", "-s3.config=/etc/seaweedfs/s3.json", "-volume.max=20", "-master.volumeSizeLimitMB=256"]
+    volumes:
+      - storage-data:/data
+      - ./infra/seaweedfs/s3.dev.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9333 && nc -z localhost 9000"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [internal]
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *backend
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      oidc: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/readyz', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  scheduler:
+    <<: *backend
+    # Exactly one scheduler. It only triggers the short due-row polling task.
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    deploy: {replicas: 1}
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    ports: ["127.0.0.1:5173:5173"]
+    depends_on: [api]
+    networks: [internal]
+
+volumes:
+  db-data:
+  storage-data:
+  frontend-node-modules:
+
+networks:
+  internal:

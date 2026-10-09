@@ -1,0 +1,42 @@
+# Development and test identity provider only. Never use in a hosted environment.
+# All users share the password "dev-password".
+issuer: http://localhost:5556/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+  responseTypes: [code]
+staticClients:
+  - id: crm-local
+    name: SEWEB CRM (local)
+    secret: change-me-oidc
+    redirectURIs:
+      - http://localhost:5173/api/v1/auth/callback
+enablePasswordDB: true
+staticPasswords:
+  - email: owner@example.test
+    username: Olga Owner
+    userID: 11111111-1111-4111-8111-111111111111
+    hash: "$2b$10$lGT9oqYVzu7hONJFUxq5CuX087TlPmokDE82vFLnkc/VG2y1xQ75C"
+  - email: admin@example.test
+    username: Adam Admin
+    userID: 22222222-2222-4222-8222-222222222222
+    hash: "$2b$10$lGT9oqYVzu7hONJFUxq5CuX087TlPmokDE82vFLnkc/VG2y1xQ75C"
+  - email: manager@example.test
+    username: Mira Manager
+    userID: 33333333-3333-4333-8333-333333333333
+    hash: "$2b$10$lGT9oqYVzu7hONJFUxq5CuX087TlPmokDE82vFLnkc/VG2y1xQ75C"
+  - email: rep@example.test
+    username: Rado Rep
+    userID: 44444444-4444-4444-8444-444444444444
+    hash: "$2b$10$lGT9oqYVzu7hONJFUxq5CuX087TlPmokDE82vFLnkc/VG2y1xQ75C"
+  - email: viewer@example.test
+    username: Vera Viewer
+    userID: 55555555-5555-4555-8555-555555555555
+    hash: "$2b$10$lGT9oqYVzu7hONJFUxq5CuX087TlPmokDE82vFLnkc/VG2y1xQ75C"
+  - email: other@example.test
+    username: Otto Other
+    userID: 66666666-6666-4666-8666-666666666666
+    hash: "$2b$10$lGT9oqYVzu7hONJFUxq5CuX087TlPmokDE82vFLnkc/VG2y1xQ75C"
