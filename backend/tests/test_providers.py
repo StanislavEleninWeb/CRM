@@ -260,6 +260,7 @@ def test_local_test_adapters_are_refused_outside_development(monkeypatch: pytest
         oidc_client_secret="real",
         oidc_dev_provider=False,
         s3_secret_key="real",
+        erasure_hash_key="a-real-erasure-key-of-thirty-two-chars-or-more",
     )
     monkeypatch.setattr(adapters, "get_settings", lambda: production)
     assert [a.name for a in available_adapters() if a.is_fake] == []

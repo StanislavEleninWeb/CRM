@@ -827,3 +827,87 @@ def test_monitoring_figures_are_counts_across_workspaces_behind_a_token(
         db.execute(text("SELECT set_config('app.ops_snapshot', 'on', true)"))
         assert db.execute(text("SELECT count(*) FROM send_intents")).scalar() == 1
         assert db.execute(text("SELECT count(*) FROM mailboxes")).scalar() == 1
+
+
+def test_support_access_without_communications_is_shown_no_message_text(
+    owner: TestClient, tenant: UUID, make_client: Any
+) -> None:
+    """Not only which routes open, but what the open ones return."""
+    row = lead_row("S-001", "Salon Aurora", **{"Public business email": "office@example-salon.bg"})
+    import_and_commit(owner, workbook_bytes([row]))
+    lead = ok(owner.get(f"{API}/leads"))["items"][0]
+    mailbox, thread = uuid4(), uuid4()
+    sql(
+        tenant,
+        "INSERT INTO mailboxes (id, tenant_id, provider, email_address, mode, status) "
+        "VALUES (:m, :t, 'gmail', 'sales@seweb.example', 'internal', 'active')",
+        m=mailbox,
+    )
+    sql(
+        tenant,
+        "INSERT INTO email_threads (id, tenant_id, mailbox_id, subject, lead_id, company_id, link_state, has_inbound) "
+        "VALUES (:th, :t, :m, 'CANARY-SUBJECT', :l, :c, 'linked', true)",
+        th=thread,
+        m=mailbox,
+        l=lead["id"],
+        c=lead["company_id"],
+    )
+    sql(
+        tenant,
+        "INSERT INTO email_messages (tenant_id, mailbox_id, thread_id, provider_message_id, direction, classification, subject, "
+        "snippet, body_text, sent_at) VALUES (:t, :m, :th, 'c1', 'inbound', 'reply', 'CANARY-SUBJECT', 'CANARY-SNIPPET', "
+        "'CANARY-BODY', now())",
+        m=mailbox,
+        th=thread,
+    )
+    ok(
+        owner.post(
+            f"{API}/email-drafts",
+            json={"lead_id": lead["id"], "subject": "CANARY-DRAFT", "body_text": "CANARY-DRAFT-BODY"},
+        ),
+        201,
+    )
+    ok(owner.post(f"{API}/notes", json={"body": "CANARY-NOTE about what they said", "lead_id": lead["id"]}), 201)
+    ok(owner.post(f"{API}/email-suppressions", json={"value": "canary-suppressed@example.bg"}), 201)
+    deal = ok(owner.post(f"{API}/deals", json={"company_id": lead["company_id"], "title": "Booking"}), 201)
+
+    support = make_client()
+    sign_in(support, "other@example.test")
+    create_workspace(support, "Support staff home")
+    grant = {"grantee_email": "other@example.test", "hours": 1, "reason": "Checking a display problem"}
+    ok(owner.post(f"{API}/support-grants", json=grant), 201)
+    assert support.post(f"{API}/auth/switch-tenant", json={"tenant_id": str(tenant)}).status_code == 204
+
+    seen = ""
+    for path, params in (
+        (f"/prospects/{lead['id']}", {}),
+        ("/prospects", {}),
+        (f"/leads/{lead['id']}", {}),
+        ("/leads", {}),
+        (f"/companies/{lead['company_id']}", {}),
+        ("/companies", {}),
+        (f"/deals/{deal['id']}", {}),
+        ("/deals", {}),
+        ("/tasks", {}),
+        ("/call-queue", {}),
+        ("/reports/funnel", {}),
+        ("/tenant", {}),
+        ("/entitlements", {}),
+    ):
+        response = support.get(f"{API}{path}", params=params)
+        assert response.status_code == 200, (path, response.status_code)
+        seen += response.text
+    assert "Salon Aurora" in seen  # the records themselves are readable
+    for canary in (
+        "CANARY-SUBJECT",
+        "CANARY-SNIPPET",
+        "CANARY-BODY",
+        "CANARY-DRAFT",
+        "CANARY-NOTE",
+        "canary-suppressed",
+    ):
+        assert canary not in seen, canary
+    # The same records with communications included do show the conversation.
+    ok(owner.post(f"{API}/support-grants", json={**grant, "include_communications": True}), 201)
+    threads = support.get(f"{API}/email-threads", params={"lead_id": lead["id"]})
+    assert threads.status_code == 200 and "CANARY-BODY" in threads.text

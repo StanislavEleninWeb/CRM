@@ -74,9 +74,9 @@ def test_the_whole_journey_in_one_workspace_while_another_sees_none_of_it(
     assert len(leads) == 3
     aurora = ok(owner.get(f"{API}/prospects/{leads['J-001']['id']}"))
     assert aurora["verification_state"] == "unverified"  # imported is not verified
-    if aurora["observation_id"]:
-        verified = ok(owner.post(f"{API}/observations/{aurora['observation_id']}/verify", json={"state": "verified"}))
-        assert verified["verification_state"] == "verified"
+    assert aurora["observation_id"]  # the import recorded a finding with its source
+    verified = ok(owner.post(f"{API}/observations/{aurora['observation_id']}/verify", json={"state": "verified"}))
+    assert verified["verification_state"] == "verified"
 
     # 2. Today's call queue, then a call whose outcome a person reports.
     queue = ok(owner.get(f"{API}/call-queue"))
@@ -109,7 +109,8 @@ def test_the_whole_journey_in_one_workspace_while_another_sees_none_of_it(
 
     # 3. Research with stand-in providers: candidates wait for a person; one is promoted.
     run = run_to_end(owner, world, start(owner, world))
-    assert run["status"] == "completed" and "not padded" in (run["summary"]["shortfall_note"] or "not padded")
+    assert run["status"] == "completed" and run["summary"]["shortfall"] > 0
+    assert "not padded" in run["summary"]["shortfall_note"]
     found = candidates(owner, run_id=run["id"])
     assert found and ok(owner.get(f"{API}/leads"))["total"] == 3  # nothing became a lead by itself
     promotable = next(c for c in found if c["state"] in ("qualified", "needs_review") and c["name"])
@@ -322,29 +323,85 @@ def test_no_record_of_one_workspace_can_be_reached_from_another_by_its_identifie
     }
 
     spec = client.get(f"{API}/openapi.json").json()
-    tried, leaks = 0, []
+    schemas = spec["components"]["schemas"]
+
+    def sample(schema: dict[str, Any]) -> Any:
+        """The smallest value a schema accepts, so the request reaches the handler instead of failing validation."""
+        if "$ref" in schema:
+            return sample(schemas[schema["$ref"].rsplit("/", 1)[1]])
+        for key in ("anyOf", "oneOf", "allOf"):
+            if key in schema:
+                return sample(next(option for option in schema[key] if option.get("type") != "null"))
+        if "enum" in schema:
+            return schema["enum"][0]
+        if "const" in schema:
+            return schema["const"]
+        kind = schema.get("type")
+        if kind == "object" or "properties" in schema:
+            return {name: sample(schema["properties"][name]) for name in schema.get("required", [])}
+        if kind == "array":
+            return [sample(schema.get("items", {}))] if schema.get("minItems") else []
+        if kind == "integer":
+            return max(int(schema.get("minimum", 1)), 1)
+        if kind == "number":
+            return float(schema.get("minimum", 1))
+        if kind == "boolean":
+            return True
+        if schema.get("format") == "uuid":
+            return str(uuid4())
+        if schema.get("format") == "date-time":
+            return (datetime.now(UTC) + timedelta(days=1)).isoformat()
+        if schema.get("format") == "date":
+            return datetime.now(UTC).date().isoformat()
+        text_value = "A value written by another workspace to test isolation"
+        return text_value[: schema.get("maxLength", 200)].ljust(schema.get("minLength", 1), "x")
+
+    def one_field(schema: dict[str, Any]) -> dict[str, Any]:
+        resolved = schemas[schema["$ref"].rsplit("/", 1)[1]] if "$ref" in schema else schema
+        properties = resolved.get("properties", {})
+        preferred = [n for n in ("title", "name", "label", "description", "subject") if n in properties]
+        for name in [*preferred, *properties]:
+            prop = properties[name]
+            value = sample(prop)
+            if isinstance(value, (str, int, bool)) and "pattern" not in json.dumps(prop):
+                return {name: value}
+        return {}
+
+    statuses: dict[tuple[str, str], int] = {}
+    messages: dict[tuple[str, str], str] = {}
     for full_path, operations in spec["paths"].items():
         names = re.findall(r"\{([^}]+)\}", full_path)
-        if not names or any(
-            n not in ids or ids[n] is None for n in names if n not in ("action", "entity_type", "entity_id", "row_id")
-        ):
+        special = {
+            "action": "cancel",
+            "entity_type": "company",
+            "entity_id": ids["company_id"],
+            "row_id": str(uuid4()),
+        }
+        if not names or any(n not in ids and n not in special for n in names):
             continue
         concrete = full_path
         for name in names:
-            value = {
-                "action": "cancel",
-                "entity_type": "companies",
-                "entity_id": ids["company_id"],
-                "row_id": str(uuid4()),
-            }.get(name) or ids[name]
-            concrete = concrete.replace("{" + name + "}", str(value))
-        for method in operations:
-            response = other.request(method.upper(), concrete, json={} if method in ("post", "put", "patch") else None)
-            tried += 1
-            if response.status_code < 400:
-                leaks.append((method.upper(), full_path, response.status_code))
-    assert tried > 60, tried  # the sweep really did cover the identifier-bearing routes
-    assert leaks == [], leaks
+            concrete = concrete.replace("{" + name + "}", str(special.get(name) or ids[name]))
+        for method, operation in operations.items():
+            body = None
+            content = operation.get("requestBody", {}).get("content", {})
+            if "application/json" in content:
+                body = sample(content["application/json"]["schema"])
+            if body == {} and method in ("patch", "put"):
+                # An empty change is refused before any lookup, so change one real field.
+                body = one_field(content["application/json"]["schema"])
+            response = other.request(method.upper(), concrete, json=body)
+            statuses[(method.upper(), full_path.removeprefix(API))] = response.status_code
+            messages[(method.upper(), full_path.removeprefix(API))] = response.text
+    leaks = {route: code for route, code in statuses.items() if code < 400}
+    assert leaks == {}, leaks
+    # A refusal only counts when it comes from looking the record up: 404, or an answer that says
+    # the record does not exist. A validation error that never reached the lookup proves nothing.
+    not_found = re.compile(r"not found|does not exist|no such|not exist", re.IGNORECASE)
+    by_lookup = {route for route, code in statuses.items() if code == 404 or not_found.search(messages[route])}
+    unproven = sorted((route, statuses[route], messages[route][:160]) for route in statuses if route not in by_lookup)
+    assert unproven == [], unproven
+    assert len(statuses) >= 66 and sum(1 for code in statuses.values() if code == 404) >= 58, statuses
     # Nothing in the first workspace changed as a result.
     after = {table: sql(tenant, f"SELECT count(*) AS n FROM {table}")[0]["n"] for table in before}
     assert after == before
@@ -404,29 +461,29 @@ def test_lists_and_reports_stay_quick_with_a_realistic_volume(
     owner: TestClient, capsys: pytest.CaptureFixture[str]
 ) -> None:
     tenant = UUID(ok(owner.get(f"{API}/tenant"))["id"])
-    sql(
-        tenant,
-        "INSERT INTO companies (tenant_id, name, city, country, source) SELECT :t, 'Company ' || g, CASE WHEN g % 3 = 0 THEN 'Sofia' ELSE 'Varna' END, "
-        "'Bulgaria', 'import' FROM generate_series(1, 5000) g",
-    )
-    sql(
-        tenant,
-        "INSERT INTO leads (tenant_id, company_id, external_id, status, source) SELECT :t, c.id, 'P-' || row_number() OVER (), 'qualified', 'import' "
-        "FROM companies c WHERE c.tenant_id = :t",
-    )
+    # 1,500 prospects through the real importer, so each has its assessment, score, channels and findings:
+    # those are the joins the prospect list and the call queue pay for.
+    rows = [
+        row(f"V-{n:04d}", f"Company {n}", 40 + n % 60, **{"Public business email": f"office{n}@example{n}.bg"})
+        for n in range(1500)
+    ]
+    import_and_commit(owner, workbook_bytes(rows))
+    assert sql(tenant, "SELECT count(*) AS n FROM lead_assessments")[0]["n"] == 1500
+    assert sql(tenant, "SELECT count(*) AS n FROM contact_channels")[0]["n"] >= 3000
     sql(
         tenant,
         "INSERT INTO call_attempts (tenant_id, company_id, lead_id, dialed_value, launched_at, outcome, outcome_reported_at) "
-        "SELECT :t, l.company_id, l.id, '0888 000 000', now() - interval '1 day', 'no_answer', now() - interval '1 day' FROM leads l "
-        "WHERE l.tenant_id = :t LIMIT 3000",
+        "SELECT :t, l.company_id, l.id, '0888 000 000', now() - interval '3 days', 'no_answer', now() - interval '3 days' FROM leads l "
+        "WHERE l.tenant_id = :t LIMIT 1000",
     )
     timings: dict[str, float] = {}
     for label, path, params in (
         ("companies, first page", "/companies", {"limit": 50}),
         ("companies, search", "/companies", {"q": "Company 49", "limit": 50}),
-        ("companies, deep page", "/companies", {"limit": 50, "offset": 4900}),
+        ("companies, deep page", "/companies", {"limit": 50, "offset": 1400}),
         ("prospects, first page", "/prospects", {"limit": 50}),
         ("prospects, search", "/prospects", {"q": "Company 12", "limit": 50}),
+        ("prospects, deep page", "/prospects", {"limit": 50, "offset": 1400}),
         ("leads, first page", "/leads", {"limit": 50}),
         ("call queue", "/call-queue", {}),
         ("funnel report", "/reports/funnel", {}),
@@ -441,6 +498,9 @@ def test_lists_and_reports_stay_quick_with_a_realistic_volume(
             best = elapsed if best is None else min(best, elapsed)
         timings[label] = round((best or 0) * 1000)
     with capsys.disabled():
-        print("\nTIMINGS (ms, best of 3, 5,000 companies and leads, 3,000 calls): " + json.dumps(timings))
+        print(
+            "\nTIMINGS (ms, best of 3; 1,500 imported prospects with assessments, scores and channels; 1,000 calls): "
+            + json.dumps(timings)
+        )
     slow = {label: ms for label, ms in timings.items() if ms > 1500}
     assert slow == {}, slow

@@ -35,7 +35,7 @@ Kept, deliberately:
 
 Effect afterwards: importing the same list skips that business (also under a new list number or name, if its website or email address matches); a research run does not store it as a candidate and it cannot be promoted; mail from or to its addresses is not stored.
 
-The hashes are keyed with `ERASURE_HASH_KEY` (the session secret if that is empty). **Changing that key silently un-erases every business**: set it once, back it up with the encryption keys, and do not rotate it without recreating the tombstones.
+The hashes are keyed with `ERASURE_HASH_KEY`. A hosted environment refuses to start without it; `make up` generates one locally (in development an empty value falls back to the session secret). **Changing that key silently un-erases every business**: set it once, back it up with the encryption keys, and do not rotate it without recreating the tombstones.
 
 Not reached by erasure: backups, exports already downloaded, events already delivered to your webhooks, and the mailbox itself.
 

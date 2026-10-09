@@ -85,3 +85,5 @@ jobs:
         run: docker build --target prod -t crm-frontend:ci frontend
       - name: API image runs as a non-root user
         run: test "$(docker run --rm crm-api:ci id -u)" != "0"
+      - name: Images contain no secrets, tests or source maps
+        run: ./infra/checks/image-checks.sh crm-api:ci crm-frontend:ci

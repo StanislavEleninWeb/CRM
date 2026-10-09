@@ -317,6 +317,7 @@ def test_development_provider_is_refused_in_production() -> None:
         "oidc_client_secret": "real-secret",
         "oidc_dev_provider": False,
         "s3_secret_key": "real-storage-secret",
+        "erasure_hash_key": "a-real-erasure-key-of-thirty-two-chars-or-more",
     }
     Settings(**base)  # type: ignore[arg-type]
     with pytest.raises(ValidationError):

@@ -6,8 +6,8 @@
 # Order: record what is running, take a backup, run migrations as a one-off job, replace the
 # services, wait for health. Any failure stops the deployment and leaves the previous containers
 # running. Rolling back is running this again with the previous image references (written to
-# previous-release.env), which is safe only for schema changes that the previous code tolerates:
-# see docs/runbooks/deployment.md.
+# previous-release.env) and SKIP_MIGRATIONS=1, which is safe only for schema changes that the
+# previous code tolerates: see docs/runbooks/deployment.md.
 set -eu
 
 : "${API_IMAGE:?API_IMAGE is required (an image reference with a digest)}"
@@ -35,15 +35,23 @@ echo "2. Pull the images"
 echo "3. Start the database and queue if they are not running"
 $COMPOSE up -d --wait db redis
 
-if [ -n "${BACKUP_COMMAND:-}" ]; then
-  echo "4. Back up before changing the schema"
-  sh -c "$BACKUP_COMMAND"
+if [ "${SKIP_MIGRATIONS:-}" = "1" ]; then
+  # Rollback: an earlier image against the current schema. Its migration tool does not know the
+  # newer revision, so the schema is left as it is. Safe only if the release followed expand-then-contract.
+  echo "4-5. SKIP_MIGRATIONS=1: the schema is left unchanged (rollback mode)"
 else
-  echo "4. No BACKUP_COMMAND set: skipping the pre-migration backup"
+  if [ -n "${BACKUP_COMMAND:-}" ]; then
+    echo "4. Back up before changing the schema"
+    sh -c "$BACKUP_COMMAND"
+  elif [ "${SKIP_BACKUP:-}" = "1" ]; then
+    echo "4. SKIP_BACKUP=1: no backup is taken before migrating"
+  else
+    echo "Refusing to migrate without a backup. Set BACKUP_COMMAND, or SKIP_BACKUP=1 to go ahead without one." >&2
+    exit 1
+  fi
+  echo "5. Run migrations as a one-off job"
+  $COMPOSE --profile release run --rm migrate
 fi
-
-echo "5. Run migrations as a one-off job"
-$COMPOSE --profile release run --rm migrate
 
 echo "6. Replace the services and wait until they are healthy"
 $COMPOSE $PROFILE_ARGS up -d --wait --remove-orphans api worker scheduler frontend ${START_PROXY:-proxy}

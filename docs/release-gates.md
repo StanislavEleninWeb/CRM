@@ -60,7 +60,8 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Release pipeline run end to end | NOT RUN — never executed; needs environments and a host |
 | Clean migration, and upgrade from the first published revision with data | PASS (local) |
 | Encrypted backup restores into an isolated database | PASS (local) |
-| Rollback rehearsed | NOT RUN — procedure documented only |
+| Rollback rehearsed | NOT RUN — procedure and a rollback mode in the deploy script exist; never executed on a host |
+| Running services cannot use the schema owner's credentials | PASS for the rendered production configuration (only the migration job receives them) |
 | Staging deployment | BLOCKED — no hosting target (U-07) |
 
 ## External Gmail launch (CRM-114)

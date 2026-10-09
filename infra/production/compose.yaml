@@ -89,8 +89,11 @@ services:
 
   migrate:
     # A one-off job, run by the deploy script before the services are replaced. It is never
-    # started by "up", and no API replica runs migrations at start-up.
+    # started by "up", and no API replica runs migrations at start-up. It alone receives the
+    # schema owner's connection string (a second env file): the API, worker and scheduler connect
+    # only as the runtime role, which cannot alter tables or switch off row-level security.
     <<: *backend
+    env_file: ["${ENV_FILE:-/etc/seweb-crm/env}", "${MIGRATE_ENV_FILE:-/etc/seweb-crm/migrate.env}"]
     profiles: [release]
     restart: "no"
     command: ["alembic", "upgrade", "head"]

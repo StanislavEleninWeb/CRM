@@ -41,6 +41,11 @@ class CorrelationMiddleware:
                 message.setdefault("headers", [])
                 message["headers"].append((REQUEST_ID_HEADER, request_id.encode()))
                 message["headers"].append((CORRELATION_ID_HEADER, correlation_id.encode()))
+                if scope["path"].startswith("/api/") and not any(
+                    k.lower() == b"cache-control" for k, _ in message["headers"]
+                ):
+                    # Answers carry a workspace's data: neither the browser nor a proxy may keep them.
+                    message["headers"].append((b"cache-control", b"no-store"))
             await send(message)
 
         try:

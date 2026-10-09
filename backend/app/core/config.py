@@ -62,7 +62,8 @@ class Settings(BaseSettings):
     ops_metrics_token: str = ""
 
     # Keys the hashes that remember erased businesses. Changing it un-erases them: every
-    # tombstone would have to be recreated. Falls back to the session secret when empty.
+    # tombstone would have to be recreated. Required in hosted environments; in development and
+    # tests an empty value falls back to the session secret.
     erasure_hash_key: str = ""
 
     # Billing. "off": every workspace has the internal pilot's allowances and nothing is charged.
@@ -125,6 +126,10 @@ class Settings(BaseSettings):
                     raise ValueError(f"{name} still contains a placeholder value")
             if self.oidc_dev_provider:
                 raise ValueError("the development identity provider is not allowed here")
+            if len(self.erasure_hash_key) < 32:
+                raise ValueError(
+                    "erasure_hash_key must be set (32+ characters) and kept: changing it un-erases erased businesses"
+                )
             for name in ("oidc_issuer", "public_base_url"):
                 if not str(getattr(self, name)).startswith("https://"):
                     raise ValueError(f"{name} must use https")
