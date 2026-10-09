@@ -135,10 +135,10 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-140 | End-to-end evidence | Cross-stack scenarios with two tenants as runtime role | TODO |
-| CRM-141 | Adversarial isolation | API, workers, pools, files, exports, webhooks, caches | TODO |
-| CRM-142 | Failure rehearsals | Duplicate delivery, notification loss, races | TODO |
-| CRM-143 | Pilot handoff | Release checklist with PASS, FAIL or BLOCKED per gate | TODO |
+| CRM-140 | End-to-end evidence | Cross-stack scenarios with two tenants as runtime role | DONE with stand-in providers; the authorised single test email is BLOCKED (U-02, U-06) |
+| CRM-141 | Adversarial isolation | API, workers, pools, files, exports, webhooks, caches | DONE |
+| CRM-142 | Failure rehearsals | Duplicate delivery, notification loss, races | DONE |
+| CRM-143 | Pilot handoff | Release checklist with PASS, FAIL or BLOCKED per gate | DONE — `docs/release-checklist.md` |
 
 ## Phase 15 — deferred (P3, not run implicitly)
 

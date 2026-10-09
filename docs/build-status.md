@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core`; pull request StanislavEleninWeb/CRM#2 holds phases 00–08 (first commit); later commits are local until the owner asks for a push |
-| Last completed phase | 12. Phase 13 is prepared but not complete (see its row) |
-| Next action | Phase 14: end-to-end evidence, adversarial isolation checks, failure rehearsals, pilot handoff with the capability matrix. To finish phase 13: rebuild the production images and run `infra/checks/image-checks.sh` when the registries are reachable; pin the remaining images by digest; run the release workflow once a host exists |
+| Last completed phase | 14. Phase 13 is prepared but not complete (see its row). Start from `release-checklist.md` |
+| Next action | See "The smallest next actions" in `release-checklist.md`. First: the owner decides whether to push phases 09–14 |
 
 ## Phases
 
@@ -29,7 +29,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 11 Subscriptions and entitlements | DONE except the Stripe sandbox run | see `git log` (`Phase 11`) | `BILLING_MODE=off` by default. Plans are labelled test plans; no price is approved (U-08). Stripe has never been contacted |
 | 12 Reporting and operational controls | DONE with stated gaps | see `git log` (`Phase 12`) | No report filter by city or service; backup retention window open until hosting exists |
 | 13 Staging and deployment pipeline | IN_PROGRESS | see `git log` (`Phase 13`) | Nothing deployed (U-07). Configuration, scripts, backups, monitoring and runbooks are in place; production images were not rebuilt or started in this session |
-| 14 Release evidence and handoff | TODO | — | |
+| 14 Release evidence and handoff | DONE | see `git log` (`Phase 14`) | Evidence is local, with stand-in providers. The checklist lists what is blocked and on whom |
 | 15 Deferred extensions | Not run implicitly | — | |
 
 ## Repository audit (CRM-001)

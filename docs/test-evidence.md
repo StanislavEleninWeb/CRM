@@ -507,3 +507,27 @@ Not covered by a test: that a research run skips an erased business (the check i
 - **Three images are pinned by tag, not digest** (uv, nginx-unprivileged, caddy); their digests could not be fetched in this session. Earlier status text saying all base images were pinned by digest was wrong and is corrected.
 - No error-tracking service is connected. No off-host backup destination or schedule exists.
 - The restore check found a stale local database (an edited migration applied earlier), not a product fault; it passed on a fresh stack. It now names the table when it fails.
+
+## Phase 14 — 9 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 360 passed, 0 skipped |
+| `pytest -m reference_fixture` | 7 passed with the private workbook. These are skipped in public CI |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 37 tests passed |
+| Browser at 375 px, signed in on the local stack: Today, Email, Reports, Billing, Data and access, Integrations, Tasks | No horizontal overflow, no unlabelled input, no nameless button, no error state |
+
+New in `tests/test_release.py`:
+
+- **One journey across the product**, two workspaces, runtime database role, stand-in providers: import → evidence verified → call queue → dialler opened → outcome with a callback for another day (leaves today's queue) → callback due appears under "needs attention" → research run → candidate promoted by a person → mailbox connected, rules approved, recipient classified → draft approved → sent once through the due-row dispatcher → second follow-up scheduled → the prospect replies → the follow-up is cancelled and stays cancelled → reply marked positive by a person → lead converted, deal won → report figures match → workspace export. The other workspace sees empty lists, an empty queue, zero figures and an empty export throughout.
+- **Identifier sweep.** For every route in the API that takes an identifier this test has a real one for, the other workspace calls it with every method it supports: more than 60 calls, none succeeds, and row counts in the first workspace are unchanged. Search, filters and bulk actions cannot reach across either.
+- **Shared connection pool.** 24 threads, 360 requests alternating between two workspaces: each only ever sees its own record.
+- **Volume.** 5,000 companies and leads and 3,000 calls. Best of three, milliseconds: companies first page 6, search 5, deep page 10; prospects first page 211, search 34; leads 6; call queue 43; funnel report 15; daily attention 5. Measured through the test client on a laptop, not under concurrent load; no index needed adding.
+
+**Not done:**
+
+- The "authorised single test email" of the journey ran against a fake mailbox. No real email has been sent (U-02, U-06).
+- The layout check is not an accessibility audit: no screen reader, no contrast measurement, no keyboard-only pass.
+- Browser caches were not examined beyond the existing rule that query keys include the workspace and responses carrying data are not cached by the proxy configuration.
+- Phases 09–14 have not run in CI on GitHub.

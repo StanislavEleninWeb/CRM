@@ -1,5 +1,7 @@
 # Release gates
 
+**For the current overall picture and the capability matrix, read `release-checklist.md`.** This file keeps the per-phase gate history.
+
 Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-evidence.md`. A gate passes only on verified behaviour, never on the existence of files.
 
 ## Phase A — call-first pilot (phases 00–05)
