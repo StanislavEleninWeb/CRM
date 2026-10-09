@@ -26,7 +26,13 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   return (
     <div className="state state-error" role="alert">
       <p className="state-title">
-        {forbidden ? "You do not have permission to view this." : "Something went wrong."}
+        {forbidden
+          ? "You do not have permission to view this."
+          : apiError?.status === 402
+            ? "The subscription does not allow this right now."
+            : apiError?.code === "plan_limit_reached"
+              ? "The plan's limit has been reached."
+              : "Something went wrong."}
       </p>
       <p>{error instanceof Error ? error.message : "Unknown error"}</p>
       {apiError?.correlationId ? (

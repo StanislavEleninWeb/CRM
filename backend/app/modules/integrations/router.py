@@ -13,6 +13,7 @@ from app.core.errors import ConflictError
 from app.core.pagination import Page, PageParams, page_params
 from app.core.security import hash_token
 from app.core.time import utcnow
+from app.modules.billing import entitlements
 from app.modules.crm.common import ValidationFailed, execute, many, one, scalar
 from app.modules.identity.audit import record_audit
 from app.modules.identity.permissions import Permission
@@ -93,6 +94,7 @@ def create_key(body: ApiKeyIn, ctx: TenantContext = MANAGE) -> ApiKeyCreated:
     beyond = sorted(s for s in set(body.scopes) if allowed[s] not in ctx.permissions)
     if beyond:
         raise ValidationFailed(f"Your own role does not include: {', '.join(beyond)}.")
+    entitlements.require_room(ctx.db, ctx.tenant_id, "api_keys", "Creating an API key")
     token, prefix = apikeys.generate()
     key_id = scalar(
         ctx,
@@ -246,6 +248,7 @@ def create_endpoint(body: EndpointIn, ctx: TenantContext = MANAGE) -> EndpointCr
         raise ValidationFailed(f"This address cannot be used: {exc}.") from exc
     if scalar(ctx, "SELECT count(*) FROM webhook_endpoints WHERE tenant_id = :tenant_id") >= 10:
         raise ConflictError("A workspace can have at most 10 webhook endpoints.")
+    entitlements.require_room(ctx.db, ctx.tenant_id, "webhook_endpoints", "Adding a webhook address")
     endpoint_id, secret = uuid4(), webhooks.new_secret()
     sealed = webhooks.seal_secret(ctx.tenant_id, endpoint_id, secret)
     execute(

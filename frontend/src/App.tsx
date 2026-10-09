@@ -8,6 +8,7 @@ import { AppShell } from "./components/AppShell";
 import { ErrorState, Loading } from "./components/States";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { AccountPage } from "./pages/AccountPage";
+import { BillingPage } from "./pages/BillingPage";
 import { CompaniesPage } from "./pages/CompaniesPage";
 import { CompanyPage } from "./pages/CompanyPage";
 import { DealsPage } from "./pages/DealsPage";
@@ -76,6 +77,7 @@ export function AppRoutes() {
               ["import", <ImportPage key="import" />],
               ["integrations", <IntegrationsPage key="integrations" />],
               ["email", <EmailPage key="email" />],
+              ["billing", <BillingPage key="billing" />],
               ["research", <ResearchPage key="research" />],
               ["prospects", <ProspectsPage key="prospects" />],
               ["verification", <ProspectsPage key="verification" verificationOnly />],

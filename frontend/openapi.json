@@ -729,6 +729,177 @@
         "title": "AuditEventOut",
         "type": "object"
       },
+      "BillingOut": {
+        "properties": {
+          "billing_enforced": {
+            "title": "Billing Enforced",
+            "type": "boolean"
+          },
+          "cancel_at_period_end": {
+            "title": "Cancel At Period End",
+            "type": "boolean"
+          },
+          "current_period_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Period End"
+          },
+          "grace_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Until"
+          },
+          "has_billing_customer": {
+            "title": "Has Billing Customer",
+            "type": "boolean"
+          },
+          "is_test_plan": {
+            "title": "Is Test Plan",
+            "type": "boolean"
+          },
+          "limits": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "None means no limit applies",
+            "title": "Limits",
+            "type": "object"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "over_limit": {
+            "description": "Limits currently exceeded, for example after a downgrade. Nothing is deleted.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Over Limit",
+            "type": "array"
+          },
+          "paid_overage": {
+            "const": "never",
+            "default": "never",
+            "title": "Paid Overage",
+            "type": "string"
+          },
+          "plan_code": {
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanOut"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "standing": {
+            "enum": [
+              "good",
+              "grace",
+              "restricted"
+            ],
+            "title": "Standing",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Error"
+          },
+          "trial_ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Ends At"
+          },
+          "usage": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Usage",
+            "type": "object"
+          }
+        },
+        "required": [
+          "billing_enforced",
+          "standing",
+          "reason",
+          "plan_code",
+          "plan_name",
+          "is_test_plan",
+          "status",
+          "trial_ends_at",
+          "grace_until",
+          "current_period_end",
+          "cancel_at_period_end",
+          "limits",
+          "usage",
+          "over_limit",
+          "notes",
+          "plans",
+          "has_billing_customer",
+          "sync_error"
+        ],
+        "title": "BillingOut",
+        "type": "object"
+      },
       "Body_createImport": {
         "properties": {
           "file": {
@@ -1943,6 +2114,34 @@
           }
         },
         "title": "ChannelUpdate",
+        "type": "object"
+      },
+      "CheckoutIn": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_code": {
+            "maxLength": 40,
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "seats": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seats"
+          }
+        },
+        "required": [
+          "plan_code"
+        ],
+        "title": "CheckoutIn",
         "type": "object"
       },
       "CompanyDetail": {
@@ -5186,6 +5385,146 @@
         "title": "EndpointUpdate",
         "type": "object"
       },
+      "EntitlementOut": {
+        "properties": {
+          "billing_enforced": {
+            "title": "Billing Enforced",
+            "type": "boolean"
+          },
+          "cancel_at_period_end": {
+            "title": "Cancel At Period End",
+            "type": "boolean"
+          },
+          "current_period_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Period End"
+          },
+          "grace_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace Until"
+          },
+          "is_test_plan": {
+            "title": "Is Test Plan",
+            "type": "boolean"
+          },
+          "limits": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "None means no limit applies",
+            "title": "Limits",
+            "type": "object"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "over_limit": {
+            "description": "Limits currently exceeded, for example after a downgrade. Nothing is deleted.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Over Limit",
+            "type": "array"
+          },
+          "plan_code": {
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "standing": {
+            "enum": [
+              "good",
+              "grace",
+              "restricted"
+            ],
+            "title": "Standing",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trial_ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Ends At"
+          },
+          "usage": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Usage",
+            "type": "object"
+          }
+        },
+        "required": [
+          "billing_enforced",
+          "standing",
+          "reason",
+          "plan_code",
+          "plan_name",
+          "is_test_plan",
+          "status",
+          "trial_ends_at",
+          "grace_until",
+          "current_period_end",
+          "cancel_at_period_end",
+          "limits",
+          "usage",
+          "over_limit",
+          "notes"
+        ],
+        "title": "EntitlementOut",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -7568,6 +7907,65 @@
         "title": "PipelineOut",
         "type": "object"
       },
+      "PlanOut": {
+        "properties": {
+          "api_keys": {
+            "title": "Api Keys",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "emails_per_month": {
+            "title": "Emails Per Month",
+            "type": "integer"
+          },
+          "is_test": {
+            "title": "Is Test",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "price_note": {
+            "description": "Shown as written. A test plan says so here.",
+            "title": "Price Note",
+            "type": "string"
+          },
+          "purchasable": {
+            "title": "Purchasable",
+            "type": "boolean"
+          },
+          "research_runs_per_month": {
+            "title": "Research Runs Per Month",
+            "type": "integer"
+          },
+          "seats_included": {
+            "title": "Seats Included",
+            "type": "integer"
+          },
+          "webhook_endpoints": {
+            "title": "Webhook Endpoints",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "is_test",
+          "price_note",
+          "seats_included",
+          "research_runs_per_month",
+          "emails_per_month",
+          "api_keys",
+          "webhook_endpoints",
+          "purchasable"
+        ],
+        "title": "PlanOut",
+        "type": "object"
+      },
       "PolicyApprove": {
         "additionalProperties": false,
         "properties": {
@@ -9171,6 +9569,19 @@
           "checks"
         ],
         "title": "Readiness",
+        "type": "object"
+      },
+      "RedirectOut": {
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "RedirectOut",
         "type": "object"
       },
       "Reject": {
@@ -12924,6 +13335,263 @@
         ]
       }
     },
+    "/api/v1/billing": {
+      "get": {
+        "operationId": "getBilling",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Billing",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/billing/checkout": {
+      "post": {
+        "description": "Open the provider's checkout for one of this application's plans. Returning from it grants nothing by itself.",
+        "operationId": "startCheckout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Start Checkout",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/billing/portal": {
+      "post": {
+        "description": "Open the provider's portal: payment method, invoices, cancellation.",
+        "operationId": "openBillingPortal",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Open Portal",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/api/v1/billing/sync": {
+      "post": {
+        "description": "Read the subscription from the billing provider now.",
+        "operationId": "syncBilling",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Sync Now",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
     "/api/v1/budget-reservations": {
       "get": {
         "operationId": "listBudgetReservations",
@@ -16433,6 +17101,68 @@
         "summary": "Link Thread",
         "tags": [
           "email"
+        ]
+      }
+    },
+    "/api/v1/entitlements": {
+      "get": {
+        "description": "What this workspace may do now, for every member.",
+        "operationId": "getEntitlements",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntitlementOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Entitlements",
+        "tags": [
+          "billing"
         ]
       }
     },

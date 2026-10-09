@@ -95,6 +95,13 @@ def create_run(
     )
     if config is None:
         raise RunBlocked("Research configuration not found.")
+    from app.core.errors import AppError
+    from app.modules.billing import entitlements
+
+    try:
+        entitlements.require_room(db, tenant_id, "research_runs_this_month", "Starting a research run")
+    except AppError as exc:
+        raise RunBlocked(exc.message) from exc
     active = db.execute(
         text(
             "SELECT 1 FROM research_runs WHERE tenant_id = :t AND config_id = :c AND status NOT IN ('cancelled', 'completed', 'failed')"
@@ -243,6 +250,16 @@ def run_step(tenant_id: UUID, run_id: UUID) -> str:
             return "paused"
         if run["status"] == "cancelling":
             return _finish(db, tenant_id, run_id, "cancelled", "Cancelled by a user. Work already paid for is counted.")
+        from app.modules.billing import entitlements
+
+        standing = entitlements.evaluate(db, tenant_id)
+        if standing.restricted:
+            # Paid work stops before the next step; what was already spent stays settled.
+            db.execute(
+                text("UPDATE research_runs SET status = 'paused', error = :e WHERE id = :r"),
+                {"e": f"Paused: {standing.reason}", "r": run_id},
+            )
+            return "paused"
         if run["status"] == "queued":
             db.execute(
                 text("UPDATE research_runs SET status = 'running', started_at = now() WHERE id = :r"), {"r": run_id}

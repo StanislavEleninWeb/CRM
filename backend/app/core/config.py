@@ -1,5 +1,6 @@
 """Validated application settings loaded from the environment."""
 
+from datetime import date
 from functools import lru_cache
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -52,6 +53,19 @@ class Settings(BaseSettings):
     mailbox_reconcile_minutes: int = Field(default=15, ge=1, le=1440)
     # External tenants cannot connect Gmail until the verification and assessment gate passes (CRM-114).
     external_gmail_enabled: bool = False
+    # Evidence for the external Gmail gate (CRM-114). The flag alone opens nothing.
+    external_gmail_client_id: str = ""
+    external_gmail_verification_ref: str = ""
+    external_gmail_assessment_valid_until: date | None = None
+
+    # Billing. "off": every workspace has the internal pilot's allowances and nothing is charged.
+    # "test": plans, trials and limits apply, against Stripe test mode. "live" is refused until
+    # approved plans and a live account exist.
+    billing_mode: Literal["off", "test"] = "off"
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    trial_days: int = Field(default=14, ge=1, le=90)
+    past_due_grace_days: int = Field(default=7, ge=0, le=60)
 
     # Whether approved messages leave the building. "off": send requests are refused.
     # "dry_run": every step runs except the provider call. "live": messages are sent.
@@ -86,6 +100,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _no_placeholders_outside_development(self) -> "Settings":
+        if self.stripe_secret_key.startswith(("sk_live", "rk_live")):
+            raise ValueError("a live Stripe key is not accepted: live billing has not been approved")
         if self.environment in ("staging", "production"):
             for name in (
                 "session_secret",
@@ -93,6 +109,8 @@ class Settings(BaseSettings):
                 "oidc_client_secret",
                 "s3_secret_key",
                 "gmail_client_secret",
+                "stripe_secret_key",
+                "stripe_webhook_secret",
             ):
                 if PLACEHOLDER_PREFIX in str(getattr(self, name)):
                     raise ValueError(f"{name} still contains a placeholder value")

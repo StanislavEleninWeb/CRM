@@ -384,3 +384,41 @@ What is covered:
 - The key-rotation script previously covered provider credentials only; it now also covers mailbox tokens and webhook secrets. Only the webhook part has its own test.
 - Event coverage is small: email sends, call outcomes, research run finished, and a test event.
 - No MCP server is provided; the build pack lists it as optional and later.
+
+## Phase 11 — 9 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 341 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 34 tests passed |
+
+**Stripe has never been contacted.** There is no Stripe account and no approved price (U-08). The provider is a stand-in inside the test process; the real adapter is contract-tested against a mocked transport. Status: `IMPLEMENTED`. It is not `VERIFIED_IN_SANDBOX`.
+
+What is covered:
+
+- **Off by default.** With billing off no limit applies and checkout is refused. A live Stripe key is rejected when settings load.
+- **Trial.** A new workspace is on a 14-day trial; the plans offered are labelled as tests with no approved price.
+- **Restriction.** After the trial, six kinds of write get 402 for the owner, and the same for an API key; reading, export and billing still work and nothing is deleted.
+- **Checkout grants nothing.** Returning to the success address, and a "completed" event with no subscription behind it, leave the workspace restricted. Access comes only when the provider reports an active subscription.
+- **Price and plan.** Extra fields such as a price or a tenant are rejected; a non-purchasable plan or a raw price ID is not found; a plan with no price configured cannot be bought; a subscription to an unknown price grants nothing and is flagged.
+- **Callbacks.** Unsigned, wrongly signed, altered by one byte and stale callbacks are refused and change nothing.
+- **Convergence.** Events delivered late, twice and in reverse order, with payloads claiming older states, always leave the stored state equal to the provider's. A repeated event is recognised. If the provider is unreachable the event is answered 503 and its retry applies the change.
+- **Tenant binding.** A callback naming another tenant, a checkout completed for another workspace, and another workspace's subscription attached to this customer all grant nothing here; an unknown customer is ignored.
+- **Past due.** Seven days of grace with full access; a second failure notice does not restart the clock; then restricted; payment restores access.
+- **Cancellation.** Access continues to the end of the paid period, then the workspace is restricted with its data intact.
+- **Seats under concurrency.** Eight simultaneous invitations for two free seats: exactly two succeed.
+- **Downgrade.** Below current use: every member keeps access, existing keys keep working, nothing is removed, only adding more is refused, and the page says which limits are exceeded.
+- **Workers.** A queued research run pauses without reserving or spending; a queued email is stopped; both name the reason.
+- **Monthly limit.** The run over the limit is refused with a message that nothing extra is charged.
+- **Access.** Only the owner reaches billing; an administrator and an API key do not; every member can see the standing.
+- **Stripe adapter contract.** Customer creation is idempotent per tenant; checkout carries the tenant reference, price and quantity; subscription parsing; 404 and refusals.
+- **External Gmail gate.** For each missing prerequisite the availability check, the connect redirect and the callback all refuse; with every prerequisite recorded they still refuse because the flow is not built; the internal pilot is unaffected.
+
+**Limitations:**
+
+- The stand-in models subscription state, not invoices, proration, tax or dunning emails. Real Stripe behaviour is only seen at the sandbox gate.
+- Seats are the subscription quantity. Per-seat proration on change is left to Stripe and is untested.
+- Monthly counts use calendar months in the workspace time zone, not the billing period.
+- Tax, invoicing and account activation are not addressed and no compliance is claimed.
+- No platform-provided AI allowance exists; every plan's allowance is zero.

@@ -287,6 +287,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Billing */
+        get: operations["getBilling"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Checkout
+         * @description Open the provider's checkout for one of this application's plans. Returning from it grants nothing by itself.
+         */
+        post: operations["startCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Portal
+         * @description Open the provider's portal: payment method, invoices, cancellation.
+         */
+        post: operations["openBillingPortal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Now
+         * @description Read the subscription from the billing provider now.
+         */
+        post: operations["syncBilling"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/budget-reservations": {
         parameters: {
             query?: never;
@@ -829,6 +906,26 @@ export interface paths {
          * @description A person decides which record an unmatched conversation belongs to, or that it belongs to none.
          */
         post: operations["linkEmailThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entitlements
+         * @description What this workspace may do now, for every member.
+         */
+        get: operations["getEntitlements"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2676,6 +2773,64 @@ export interface components {
             /** Target Type */
             target_type: string;
         };
+        /** BillingOut */
+        BillingOut: {
+            /** Billing Enforced */
+            billing_enforced: boolean;
+            /** Cancel At Period End */
+            cancel_at_period_end: boolean;
+            /** Current Period End */
+            current_period_end: string | null;
+            /** Grace Until */
+            grace_until: string | null;
+            /** Has Billing Customer */
+            has_billing_customer: boolean;
+            /** Is Test Plan */
+            is_test_plan: boolean;
+            /**
+             * Limits
+             * @description None means no limit applies
+             */
+            limits: {
+                [key: string]: number | null;
+            };
+            /** Notes */
+            notes: string[];
+            /**
+             * Over Limit
+             * @description Limits currently exceeded, for example after a downgrade. Nothing is deleted.
+             */
+            over_limit: string[];
+            /**
+             * Paid Overage
+             * @default never
+             * @constant
+             */
+            paid_overage?: "never";
+            /** Plan Code */
+            plan_code: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Plans */
+            plans: components["schemas"]["PlanOut"][];
+            /** Reason */
+            reason: string | null;
+            /**
+             * Standing
+             * @enum {string}
+             */
+            standing: "good" | "grace" | "restricted";
+            /** Status */
+            status: string;
+            /** Sync Error */
+            sync_error: string | null;
+            /** Trial Ends At */
+            trial_ends_at: string | null;
+            /** Usage */
+            usage: {
+                [key: string]: number;
+            };
+        };
         /** Body_createImport */
         Body_createImport: {
             /** File */
@@ -3043,6 +3198,13 @@ export interface components {
             restriction_reason?: string | null;
             /** Verification State */
             verification_state?: ("unverified" | "verified" | "invalid") | null;
+        };
+        /** CheckoutIn */
+        CheckoutIn: {
+            /** Plan Code */
+            plan_code: string;
+            /** Seats */
+            seats?: number | null;
         };
         /** CompanyDetail */
         CompanyDetail: {
@@ -3955,6 +4117,52 @@ export interface components {
             /** Status */
             status?: ("active" | "paused") | null;
         };
+        /** EntitlementOut */
+        EntitlementOut: {
+            /** Billing Enforced */
+            billing_enforced: boolean;
+            /** Cancel At Period End */
+            cancel_at_period_end: boolean;
+            /** Current Period End */
+            current_period_end: string | null;
+            /** Grace Until */
+            grace_until: string | null;
+            /** Is Test Plan */
+            is_test_plan: boolean;
+            /**
+             * Limits
+             * @description None means no limit applies
+             */
+            limits: {
+                [key: string]: number | null;
+            };
+            /** Notes */
+            notes: string[];
+            /**
+             * Over Limit
+             * @description Limits currently exceeded, for example after a downgrade. Nothing is deleted.
+             */
+            over_limit: string[];
+            /** Plan Code */
+            plan_code: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Standing
+             * @enum {string}
+             */
+            standing: "good" | "grace" | "restricted";
+            /** Status */
+            status: string;
+            /** Trial Ends At */
+            trial_ends_at: string | null;
+            /** Usage */
+            usage: {
+                [key: string]: number;
+            };
+        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -4769,6 +4977,32 @@ export interface components {
             /** Stages */
             stages: components["schemas"]["StageOut"][];
         };
+        /** PlanOut */
+        PlanOut: {
+            /** Api Keys */
+            api_keys: number;
+            /** Code */
+            code: string;
+            /** Emails Per Month */
+            emails_per_month: number;
+            /** Is Test */
+            is_test: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Price Note
+             * @description Shown as written. A test plan says so here.
+             */
+            price_note: string;
+            /** Purchasable */
+            purchasable: boolean;
+            /** Research Runs Per Month */
+            research_runs_per_month: number;
+            /** Seats Included */
+            seats_included: number;
+            /** Webhook Endpoints */
+            webhook_endpoints: number;
+        };
         /** PolicyApprove */
         PolicyApprove: {
             /**
@@ -5180,6 +5414,11 @@ export interface components {
              * @enum {string}
              */
             status: "ready" | "not_ready";
+        };
+        /** RedirectOut */
+        RedirectOut: {
+            /** Url */
+            url: string;
         };
         /** Reject */
         Reject: {
@@ -7042,6 +7281,234 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getBilling: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    startCheckout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedirectOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    openBillingPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedirectOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    syncBilling: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingOut"];
+                };
             };
             /** @description Unauthorized */
             401: {
@@ -9564,6 +10031,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementOut"];
                 };
             };
             /** @description Unauthorized */

@@ -9,7 +9,7 @@ Configuration and verification instructions. No secrets belong in this file. Sta
 | Google Workspace / Gmail (Internal app) | Manual send and reply tracking for SEWEB | IMPLEMENTED (contract-tested against a mocked transport; never connected to a real mailbox) | U-02 for live use |
 | Google Places API | Business discovery | NOT_STARTED | U-04 for live use |
 | AI model provider | Score proposals and drafts | NOT_STARTED | U-03 for live use |
-| Stripe Billing (test mode) | Subscriptions | NOT_STARTED | U-08 |
+| Stripe Billing (test mode) | Subscriptions | IMPLEMENTED (contract-tested against a mocked transport; never run against Stripe) | U-08 |
 | S3-compatible storage | Files and exports | VERIFIED_LOCALLY (SeaweedFS) | Production bucket not chosen |
 
 Setup steps are added to this file as each provider is implemented.
@@ -104,7 +104,7 @@ A provider callback is trusted only after its own verification, and it is mapped
 | Callback | Verification | Tenant mapping | Status |
 |---|---|---|---|
 | Gmail push (`/api/v1/webhooks/gmail`) | Google-signed OIDC token: issuer, audience and service account | The mailbox address looked up in `mailbox_routes`; the history ID in the message is never used as data | IMPLEMENTED, tested with a local signer |
-| Stripe (`/api/v1/webhooks/stripe`) | Signature over the raw body | Customer and subscription IDs stored at checkout | Not built yet (phase 11) |
+| Stripe (`/api/v1/webhooks/stripe`) | Signature over the raw body, five-minute tolerance | The customer ID looked up in `billing_customers`; the payload's own tenant references are checked against it and never trusted | IMPLEMENTED, tested with a local signer |
 
 ## API keys and outbound webhooks
 
@@ -113,3 +113,23 @@ See `examples/api/README.md` for use. Operational notes:
 - Keys and webhook signing secrets are shown once. A lost key is revoked and replaced; a lost secret is rotated (the old one stays valid for 24 hours).
 - Webhook secrets are encrypted with `SECRET_ENCRYPTION_KEYS`; the rotation command re-encrypts them along with provider credentials and mailbox tokens.
 - Outbound deliveries only go to public addresses over HTTPS (plain HTTP is accepted in development and test only). The address is resolved and checked at every delivery, and the connection is made to the address that was checked.
+
+## Billing (Stripe, test mode)
+
+Nothing below has been done; no Stripe account or approved price exists (U-08). A live key (`sk_live…`) is refused at start-up.
+
+| Variable | Meaning |
+|---|---|
+| `BILLING_MODE` | `off` (default): no limits, nothing charged. `test`: trials, plans and limits apply against Stripe test mode |
+| `STRIPE_SECRET_KEY` | A **test-mode** secret or restricted key |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret of the webhook endpoint |
+| `TRIAL_DAYS`, `PAST_DUE_GRACE_DAYS` | Defaults 14 and 7 |
+
+Steps for the owner, in Stripe test mode:
+
+1. Create one recurring per-seat price for each plan to be sold. Attach each to its plan: `docker compose exec api python -m app.modules.billing.configure test_starter price_…`. A plan without a price cannot be bought.
+2. Add a webhook endpoint for `<PUBLIC_BASE_URL>/api/v1/webhooks/stripe` with the events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+3. Enable the customer portal (payment method, invoices, cancellation, plan change).
+4. Set the variables, restart, and run the lifecycle by hand: subscribe with a test card, fail a payment, recover, cancel. Record the result in `docs/test-evidence.md`. Until then the status stays IMPLEMENTED.
+
+Before live billing, and not addressed by this build: approved plans and prices, tax registration and collection, invoice content, refund policy, and Stripe account activation. The seeded plans are named and labelled as tests so they cannot be mistaken for an offer.

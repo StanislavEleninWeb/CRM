@@ -244,6 +244,9 @@ def create_invitation(
     ).scalar_one_or_none()
     if already_member:
         raise ConflictError("That person is already a member of this workspace.")
+    from app.modules.billing import entitlements
+
+    entitlements.require_room(ctx.db, ctx.tenant_id, "seats", "Inviting another member")
     settings = get_settings()
     token = new_token()
     row = (

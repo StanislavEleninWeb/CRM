@@ -918,6 +918,9 @@ def send_draft(draft_id: UUID, body: SendDraft, ctx: TenantContext = SEND) -> Se
         raise ConflictError(f"This message may not be sent: {dispatch.refusal(decision)}")
     if decision.content_hash != draft["approved_content_hash"]:
         raise ConflictError("The outreach rules or sender details changed after approval. Approve the message again.")
+    from app.modules.billing import entitlements
+
+    entitlements.require_room(ctx.db, ctx.tenant_id, "emails_this_month", "Sending an email")
     when = utcnow()
     if body.scheduled_local:
         zone = scalar(ctx, "SELECT timezone FROM tenants WHERE id = :tenant_id")

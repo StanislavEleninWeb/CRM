@@ -44,8 +44,10 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 |---|---|
 | Scoped API keys and idempotency | PASS (local) |
 | Signed webhooks with replay safety | PASS (local, mocked receiver). Delivery to a real external receiver has not been exercised |
-| Billing lifecycle in Stripe test mode | BLOCKED — account and plans (U-08) |
-| Entitlements enforced on the server | NOT_STARTED |
+| Billing lifecycle against a stand-in provider (duplicates, reordering, grace, cancellation, downgrade) | PASS (local) |
+| Billing lifecycle in Stripe test mode | BLOCKED — account and plans (U-08). Status: IMPLEMENTED, not VERIFIED_IN_SANDBOX |
+| Approved plans and prices; tax, invoicing and account activation | BLOCKED — owner decisions (U-08). Not claimed |
+| Entitlements enforced on the server, for API keys and in workers | PASS (local) |
 | Retention, export, deletion, support access | NOT_STARTED |
 | Images, pipeline, restore, rollback | NOT_STARTED |
 | Staging deployment | BLOCKED — no hosting target (U-07) |
@@ -54,9 +56,9 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 
 | Gate | Status |
 |---|---|
-| Scope list and data-flow documentation | NOT_STARTED |
+| Scope list and data-flow documentation | DONE (`docs/external-gmail-gate.md`) |
 | Google verification for sensitive and restricted scopes | BLOCKED (U-09) |
 | Annual security assessment: quote, owner, validity date | BLOCKED (U-09) |
-| All onboarding paths reject external Gmail while the gate is closed | PASS for the connect and callback paths (phase 08); re-check when billing onboarding exists |
+| All onboarding paths reject external Gmail while the gate is closed | PASS: availability, connect and callback, for each missing prerequisite and with all recorded. Billing adds no onboarding path to Gmail |
 
 The commercial core may launch with external Gmail disabled, provided that is clearly disclosed.

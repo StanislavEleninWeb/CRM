@@ -34,7 +34,7 @@ export function mockApi(routes: Record<string, Handler>) {
       body: parseBody(text),
     };
     calls.push(call);
-    const handler = routes[`${call.method} ${call.path}`];
+    const handler = routes[`${call.method} ${call.path}`] ?? DEFAULT_ROUTES[`${call.method} ${call.path}`];
     if (!handler) return apiError(500, "unmocked", `No mock for ${call.method} ${call.path}`);
     return handler(call);
   });
@@ -49,6 +49,27 @@ function parseBody(text: string): unknown {
     return text; // multipart uploads are not JSON
   }
 }
+
+export const goodStanding = {
+  billing_enforced: false,
+  standing: "good",
+  reason: null,
+  plan_code: "internal_pilot",
+  plan_name: "Internal pilot",
+  is_test_plan: false,
+  status: "not_billed",
+  trial_ends_at: null,
+  grace_until: null,
+  current_period_end: null,
+  cancel_at_period_end: false,
+  limits: { seats: null, research_runs_this_month: null, emails_this_month: null, api_keys: null, webhook_endpoints: null },
+  usage: { seats: 1, research_runs_this_month: 0, emails_this_month: 0, api_keys: 0, webhook_endpoints: 0 },
+  over_limit: [],
+  notes: [],
+};
+
+/** Shown on every page, so every test would otherwise have to mock it. */
+const DEFAULT_ROUTES: Record<string, Handler> = { "GET /api/v1/entitlements": () => json(goodStanding) };
 
 export function deferred<T>() {
   let resolve!: (value: T) => void;

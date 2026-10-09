@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { StandingBanner } from "../pages/BillingPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ErrorState } from "./States";
 
@@ -24,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/import", label: "Import", permission: "import.run" },
   { to: "/integrations", label: "Integrations", permission: "reports.read" },
   { to: "/team", label: "Team", permission: "members.read" },
+  { to: "/billing", label: "Billing", permission: "tenant.billing" },
   { to: "/account", label: "Account" },
 ];
 
@@ -104,6 +106,7 @@ export function AppShell() {
       </nav>
       <main id="main" className="content" tabIndex={-1}>
         {switchError ? <ErrorState error={switchError} /> : null}
+        {tenantId ? <StandingBanner /> : null}
         {/* Remount on workspace change so no component keeps state from the previous one. */}
         <ErrorBoundary key={`${tenantId}:${location.pathname}`}>
           <Outlet />

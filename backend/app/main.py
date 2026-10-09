@@ -8,6 +8,8 @@ from app.core.errors import ErrorEnvelope, register_error_handlers
 from app.core.idempotency import IdempotencyMiddleware
 from app.core.logging import configure_logging
 from app.core.middleware import CorrelationMiddleware
+from app.modules.billing.router import public_router as billing_public_router
+from app.modules.billing.router import router as billing_router
 from app.modules.crm.companies_router import router as companies_router
 from app.modules.crm.records_router import router as records_router
 from app.modules.crm.sales_router import router as sales_router
@@ -69,6 +71,8 @@ def create_app() -> FastAPI:
     v1.include_router(email_public_router)
     v1.include_router(unsubscribe_router)
     v1.include_router(integrations_router)
+    v1.include_router(billing_router)
+    v1.include_router(billing_public_router)
     app.include_router(v1)
     return app
 

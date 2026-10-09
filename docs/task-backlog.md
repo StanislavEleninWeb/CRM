@@ -107,11 +107,11 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-110 | Billing sandbox | Stripe test mode when credentials exist | TODO |
-| CRM-111 | Entitlements | Enforced on API and workers | TODO |
-| CRM-112 | Lifecycle and quota enforcement | Out-of-order events converge; downgrade keeps data | TODO |
-| CRM-113 | Billing portal | Owner access | TODO |
-| CRM-114 | External Gmail verification and cost gate | Onboarding rejected while gate closed | TODO |
+| CRM-110 | Billing sandbox | Stripe test mode when credentials exist | BLOCKED (U-08) — adapter IMPLEMENTED and contract-tested against a mocked transport; never run against Stripe |
+| CRM-111 | Entitlements | Enforced on API and workers | DONE |
+| CRM-112 | Lifecycle and quota enforcement | Out-of-order events converge; downgrade keeps data | DONE (stand-in provider) |
+| CRM-113 | Billing portal | Owner access | DONE (stand-in provider) |
+| CRM-114 | External Gmail verification and cost gate | Onboarding rejected while gate closed | DONE for the gate and its record (`docs/external-gmail-gate.md`); verification and assessment themselves BLOCKED (U-09) |
 
 ## Phase 12 — reporting and operational controls (P2, depends on 09–11)
 

@@ -278,6 +278,12 @@ def _final_check(tenant_id: UUID, intent_id: UUID, lease: UUID) -> dict[str, Any
         if settings.email_dispatch == "off" or (settings.email_dispatch != "live" and not intent["dry_run"]):
             _block(db, tenant_id, intent, "blocked", "Sending is switched off on this installation.")
             return None
+        from app.modules.billing import entitlements
+
+        standing = entitlements.evaluate(db, tenant_id)
+        if standing.restricted:
+            _block(db, tenant_id, intent, "blocked", f"Not sent: {standing.reason}")
+            return None
         if draft["version"] != intent["draft_version"] or draft["status"] != "queued":
             _block(db, tenant_id, intent, "blocked", "The message was changed after it was approved.")
             return None

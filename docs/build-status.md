@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core`; pull request StanislavEleninWeb/CRM#2 holds phases 00–08 (first commit); later commits are local until the owner asks for a push |
-| Last completed phase | 10 (releases A and B implemented; B live gates blocked; commercial core in progress) |
-| Next action | Phase 11: plans, entitlements and Stripe test-mode billing (account and prices needed, U-08); CRM-114 external Gmail gate |
+| Last completed phase | 11 (releases A and B implemented; B live gates blocked; commercial core in progress) |
+| Next action | Phase 12: daily workspace, funnel reporting, retention, export and deletion, support access |
 
 ## Phases
 
@@ -26,7 +26,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 08 Internal Gmail and eligibility | DONE | see `git log` (`Phase 08`) | Stand-ins only. Live Gmail BLOCKED (U-02); live unsolicited email BLOCKED (U-06). Nothing can be sent yet |
 | 09 Reliable manual sends | DONE | see `git log` (`Phase 09`) | Sending is `off` by default. Verified with a fake mailbox only; no email has ever been sent |
 | 10 Public API, webhooks, Hermes | DONE | see `git log` (`Phase 10`) | Webhook delivery verified against a mocked receiver only |
-| 11 Subscriptions and entitlements | TODO | — | |
+| 11 Subscriptions and entitlements | DONE except the Stripe sandbox run | see `git log` (`Phase 11`) | `BILLING_MODE=off` by default. Plans are labelled test plans; no price is approved (U-08). Stripe has never been contacted |
 | 12 Reporting and operational controls | TODO | — | |
 | 13 Staging and deployment pipeline | TODO | — | |
 | 14 Release evidence and handoff | TODO | — | |
@@ -88,3 +88,7 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - An API key authenticates with `Authorization: Bearer crm_…` and goes through the same `tenant_with(permission)` checks as a person; `app.core.apikeys.ALLOWED_SCOPES` is the complete list of what a key can hold. An endpoint that records a person's judgement or loosens a restriction under one of those scopes must call `ctx.require_person(...)`; `test_a_key_with_every_scope_still_cannot_make_a_persons_decisions` lists them. New endpoints need no extra work to be key-safe, but a new permission is not available to keys until it is added there on purpose.
 - Anything written for a request made with a key is attributed through `session.info["api_key_id"]`, not through request-local context (dependencies and handlers run on different worker threads).
 - New event types are added to `webhooks.KNOWN_EVENTS` and emitted with `outbox.emit` inside the transaction that makes the change.
+- Whether a workspace may act is decided by `billing.entitlements.evaluate`. It is called in `get_tenant_context` for every state-changing request (people and API keys), and again by the research step and the send dispatcher. A new worker that spends money or sends anything must call it too.
+- Billing state changes only through `billing.service.sync`, which reads the provider. Event payloads and browser redirects are never applied.
+- A new countable resource gets an entry in `entitlements.LIMITS` and a `require_room` call where it is created.
+- `plans` is seeded by migration and is not cleared between tests.

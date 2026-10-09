@@ -115,7 +115,8 @@ def clean_tables(migrator_engine: object) -> Iterator[None]:
         tables = conn.execute(
             text(
                 "SELECT string_agg(format('%I', tablename), ', ') FROM pg_tables "
-                "WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
+                # plans is product configuration seeded by a migration, not test data
+                "WHERE schemaname = 'public' AND tablename NOT IN ('alembic_version', 'plans')"
             )
         ).scalar()
         if tables:

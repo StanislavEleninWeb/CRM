@@ -654,6 +654,49 @@ def test_another_tenant_cannot_use_the_internal_google_app(
     assert "not configured" in ok(owner.get(f"{API}/mailboxes/gmail/availability"))["reason"]
 
 
+def test_the_external_gmail_gate_needs_every_recorded_prerequisite_and_still_stays_closed(
+    owner: TestClient, gmail: dict[str, Any], make_client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import date
+
+    settings = get_settings()
+    other = make_client()
+    sign_in(other, "other@example.test")
+    create_workspace(other, "Another customer")
+
+    def closed(expected: str) -> None:
+        reason = ok(other.get(f"{API}/mailboxes/gmail/availability"))["reason"]
+        assert expected in reason, reason
+        assert other.get(f"{API}/mailboxes/gmail/connect", follow_redirects=False).status_code == 409
+        started = owner.get(f"{API}/mailboxes/gmail/connect", follow_redirects=False)
+        state = httpx.URL(started.headers["location"]).params["state"]
+        other.cookies.set("crm_gmail_state", state)
+        assert (
+            other.get(
+                f"{API}/mailboxes/gmail/callback", params={"code": "c", "state": state}, follow_redirects=False
+            ).status_code
+            == 401
+        )
+        assert ok(other.get(f"{API}/mailboxes")) == []
+
+    assert len(oauth.external_gmail_gate(settings)) == 4
+    closed("the release flag is off")
+    monkeypatch.setattr(settings, "external_gmail_enabled", True)
+    closed("no separately verified Google app")
+    monkeypatch.setattr(settings, "external_gmail_client_id", CLIENT_ID)  # the internal app, reused
+    closed("the internal Google app cannot be used for other organisations")
+    monkeypatch.setattr(settings, "external_gmail_client_id", "external-client.apps.example")
+    closed("verification of the sensitive and restricted scopes is not recorded")
+    monkeypatch.setattr(settings, "external_gmail_verification_ref", "recorded-reference")
+    closed("no security assessment is recorded")
+    monkeypatch.setattr(settings, "external_gmail_assessment_valid_until", date(2026, 1, 1))
+    closed("the security assessment expired on 2026-01-01")
+    monkeypatch.setattr(settings, "external_gmail_assessment_valid_until", date(2099, 1, 1))
+    assert oauth.external_gmail_gate(settings) == []
+    closed("not implemented yet")  # the gate can be open on paper; the flow is still not built
+    assert ok(owner.get(f"{API}/mailboxes/gmail/availability"))["available"] is True  # the internal pilot is unaffected
+
+
 # --- synchronisation -------------------------------------------------------------------------
 
 

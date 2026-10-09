@@ -43,6 +43,25 @@ Decided while testing the queue on real data; shown to users under "How the queu
 | Wrong number | Stays in the queue if another number may be called |
 | Dialler opened, no outcome reported | Stays in the queue: nothing is known to have happened |
 
+## Billing policy (phase 11)
+
+Working defaults, changeable by the owner. None of this is a price.
+
+| Situation | Behaviour |
+|---|---|
+| New workspace | 14-day trial on the trial plan, dated from creation |
+| Trial ends with no subscription | Restricted |
+| Payment overdue | 7 days of grace with full access, then restricted |
+| Cancellation | Access until the end of the paid period, then restricted |
+| Restricted | Read, export and billing only. Nothing is created, sent or deleted |
+| Running research when restricted | Pauses before its next paid step; cost already incurred is settled; resumable after payment |
+| Queued email when restricted | Stopped before sending; one already with the mailbox provider is unaffected |
+| Downgrade below current use | Members, keys and data are kept; only adding more is refused |
+| Over a limit | The action is refused. There is no paid overage |
+| Platform-provided AI | Not offered: the allowance is zero on every plan. Tenants bring their own key |
+| Who manages billing | The owner only |
+| Internal pilot | `BILLING_MODE=off`: nothing is limited or charged |
+
 ## Unresolved
 
 | # | Choice | Blocks | Needed by |

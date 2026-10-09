@@ -8,6 +8,7 @@ is the configured domain. The internal app is never a route for another tenant.
 
 import time
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 from urllib.parse import urlencode
 
@@ -16,6 +17,7 @@ import jwt
 
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
+from app.core.time import utcnow
 from app.modules.email.gmail import REQUIRED_SCOPES, SCOPES, MailboxError
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -44,10 +46,36 @@ def ensure_tenant_may_connect(settings: Settings, tenant_id: str) -> None:
         raise MailboxNotAvailable("Gmail is not configured for this installation.")
     if tenant_id in settings.gmail_internal_tenants:
         return
-    if settings.external_gmail_enabled:
-        # Reserved for after Google's verification and security assessment. Not reachable today.
-        raise MailboxNotAvailable("External Gmail connections are not implemented yet.")
-    raise MailboxNotAvailable("Gmail is available only to the organisation that owns this installation's Google app.")
+    missing = external_gmail_gate(settings)
+    if missing:
+        raise MailboxNotAvailable(
+            "Gmail is available only to the organisation that owns this installation's Google app. "
+            f"Connecting other organisations is closed: {'; '.join(missing)}."
+        )
+    # Every recorded prerequisite is in place, and the external connection flow itself is still not built.
+    raise MailboxNotAvailable("External Gmail connections are not implemented yet.")
+
+
+def external_gmail_gate(settings: Settings, today: date | None = None) -> list[str]:
+    """What is still missing before another organisation may connect Gmail. Empty means the gate is open.
+
+    The Internal Google app is never an answer: an external connection needs its own verified client.
+    """
+    missing = []
+    if not settings.external_gmail_enabled:
+        missing.append("the release flag is off")
+    if not settings.external_gmail_client_id:
+        missing.append("no separately verified Google app is configured")
+    elif settings.external_gmail_client_id == settings.gmail_client_id:
+        missing.append("the internal Google app cannot be used for other organisations")
+    if not settings.external_gmail_verification_ref:
+        missing.append("Google's verification of the sensitive and restricted scopes is not recorded")
+    valid_until = settings.external_gmail_assessment_valid_until
+    if valid_until is None:
+        missing.append("no security assessment is recorded")
+    elif valid_until < (today or utcnow().date()):
+        missing.append(f"the security assessment expired on {valid_until.isoformat()}")
+    return missing
 
 
 class GoogleAuth:

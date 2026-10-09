@@ -184,7 +184,7 @@ def test_no_read_schema_exposes_a_secret_field(client: TestClient) -> None:
     # Inputs, and the two "shown once at creation" responses.
     write_only = {"ConnectionIn", "CredentialIn", "InvitationAccept", "InvitationCreated", "EndpointCreated"}
     suspicious = ("secret", "ciphertext", "nonce", "password", "token_hash", "credential", "api_key", "private_key")
-    allowed = {"has_credential", "credential_hint", "csrf_token"}
+    allowed = {"has_credential", "credential_hint", "csrf_token", "api_keys"}  # api_keys: a count in a plan
     offenders = []
     for name, model in schema["components"]["schemas"].items():
         if name in write_only:

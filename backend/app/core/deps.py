@@ -146,7 +146,7 @@ def get_user_session(principal: CurrentPrincipal) -> Iterator[Session]:
         yield session
 
 
-def get_tenant_context(principal: CurrentPrincipal) -> Iterator[TenantContext]:
+def get_tenant_context(principal: CurrentPrincipal, request: Request) -> Iterator[TenantContext]:
     if principal.active_tenant_id is None:
         raise PermissionDeniedError("Select or create a workspace first.")
     context = RlsContext(user_id=principal.user_id, tenant_id=principal.active_tenant_id)
@@ -161,6 +161,14 @@ def get_tenant_context(principal: CurrentPrincipal) -> Iterator[TenantContext]:
         if principal.api_key_id is not None:
             # Carried on the session so every audit entry written in this request names the key.
             session.info["api_key_id"] = str(principal.api_key_id)
+        if request.method not in SAFE_METHODS and "/billing" not in request.url.path:
+            # A restricted workspace can read, export and reach billing. Enforced here, so it holds for
+            # people and API keys alike, whatever the page shows.
+            from app.modules.billing import entitlements
+
+            entitlement = entitlements.evaluate(session, principal.active_tenant_id)
+            if entitlement.restricted:
+                raise entitlements.PaymentRequiredError(entitlement.reason or "The subscription is not active.")
         granted = permissions_for(resolved)
         if principal.scopes is not None:
             # A key holds its scopes, capped by what keys may ever do and by its creator's role today.

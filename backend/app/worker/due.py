@@ -52,6 +52,9 @@ def _load_builtin_handlers() -> None:
     from app.modules.integrations import webhooks
 
     _handlers.setdefault(webhooks.DUE_KIND, webhooks.deliver_handler)
+    from app.modules.billing import service as billing
+
+    _handlers.setdefault(billing.DUE_KIND, billing.reconcile_handler)
     _builtin_loaded = True
 
 
