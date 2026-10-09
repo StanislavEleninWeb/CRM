@@ -7,9 +7,9 @@ Resume from here after a context reset. Do not rerun completed phases.
 | Field | Value |
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
-| Branch | `build/core` (local commits only; not pushed) |
-| Last completed phase | 07, with one open item (release A complete; release B in progress) |
-| Next action | Phase 08: CRM-084 email eligibility service first, then internal Gmail OAuth, drafts and history sync |
+| Branch | `build/core`, pushed; pull request StanislavEleninWeb/CRM#2 |
+| Last completed phase | 08 (release A complete; release B in progress) |
+| Next action | Phase 09: approvals bound to content, send intents on due rows, reconciliation of ambiguous sends |
 
 ## Phases
 
@@ -23,7 +23,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 05 Prospect review, shortlist, calls | DONE | see `git log` (`Phase 05`) | Phase A handoff check passed on the local stack |
 | 06 Provider connections and usage | DONE | see `git log` (`Phase 06`) | Only local test adapters exist; no real provider has been contacted |
 | 07 AI research | DONE except refresh mode | see `git log` (`Phase 07`) | Synthetic runs only. Live research BLOCKED (U-03, U-04). Open: refresh-existing mode (CRM-074), multi-page inspection |
-| 08 Internal Gmail and eligibility | TODO | — | |
+| 08 Internal Gmail and eligibility | DONE | see `git log` (`Phase 08`) | Stand-ins only. Live Gmail BLOCKED (U-02); live unsolicited email BLOCKED (U-06). Nothing can be sent yet |
 | 09 Reliable manual sends | TODO | — | |
 | 10 Public API, webhooks, Hermes | TODO | — | |
 | 11 Subscriptions and entitlements | TODO | — | |
@@ -79,3 +79,5 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - Anything that must happen later is a row in `due_jobs` (`app.worker.due.schedule`). The scheduler claims due rows through `due_jobs_claim()`; handlers are registered in `app/worker/due.py`. Never use Celery `eta` or `countdown`.
 - Provider content passes through `SourcePolicy.storable()` before it is stored. Add a policy row before adding a source.
 - After a real import the local development database holds real prospect data. It lives only in the local Docker volume; `make reset` removes it.
+- Email: eligibility is decided only by `app.modules.email.eligibility.evaluate`; anything that sends must call it at send time, not rely on an earlier preview. Mailbox HTML is sanitised on the server and the frontend still shows plain text only.
+- A Gmail notification is a trigger, never data: the cursor moves only after a page of history has been stored and committed.

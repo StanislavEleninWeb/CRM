@@ -41,6 +41,17 @@ A free-mail domain is not evidence of legal form. Unknown facts route to review;
 | Individually approved reply to an incoming message | Allowed under the reply path; not treated as unsolicited outreach |
 | Requested or consented message | Allowed only through an explicit recorded policy path |
 
+## How the rules are enforced (phase 08)
+
+- Each workspace starts with the draft policy. While it is a draft, unsolicited email is blocked.
+- Only the owner can approve. Approval records who reviewed the law and the register process, the date the source was checked, the label wording and how old a register may be. Each approval creates a new version; every eligibility decision stores the version it used.
+- The opt-out register is imported as a file obtained through its official channel. The application does not fetch it. No register, or one older than the approved age, blocks unsolicited email.
+- Recipient type is recorded by a person with evidence. Without it the message goes to review.
+- The label, sender identification and opt-out link are appended by the server when the message is rendered; editing the draft cannot remove them. If the label wording is empty the message is blocked.
+- The opt-out link is signed. Opening it shows a confirmation button, so a mail scanner cannot opt someone out; the one-click POST form used by mail clients works without a session.
+- A permanent delivery failure suppresses the address; a temporary one does not. Suppressions cannot be deleted, only lifted with a note, and re-importing a list does not undo them.
+- A follow-up the prospect asked for on a call is allowed only for the address and scope recorded with that call.
+
 ## Open items before live unsolicited email
 
 1. Confirm the current text of Article 6 and how sole traders are treated.

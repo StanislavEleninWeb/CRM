@@ -273,3 +273,34 @@ What is covered:
 - Website-to-listing matching is a word-overlap check on the page title and text; anything uncertain goes to review.
 - The Places adapter's cost figure is a list-price ceiling entered by hand; it must be checked against current pricing before a live run.
 - Google Places terms for an EEA-billed account are still unverified (U-04), so nothing beyond the place ID is stored and review counts are not used for scoring.
+
+## Phase 08 — 9 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 274 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 26 tests passed |
+
+**No real mailbox or Google account was contacted and no email was sent.** Google's token and key endpoints are replaced by a local signer; the mailbox is a fake; the Gmail HTTP adapter is contract-tested against a mocked transport (`IMPLEMENTED`). There is no code path that sends a message yet.
+
+What is covered:
+
+- **Eligibility.** An unsolicited draft is blocked until a mailbox exists, the policy is approved, the sender is identified, a current register is on file and the recipient is classified with evidence; unknown recipients go to review. A register match, a stale register, a private individual, a consumer context and a sole trader each give the expected outcome. Suppression by address or domain and a company-level email restriction always block, including after re-import. Suppressions cannot be deleted by the runtime database role.
+- **Required content.** Editing a draft cannot remove the label, sender identification or opt-out link; an empty label blocks; a recipient containing a line break is refused.
+- **Requested follow-up.** Allowed only after a call outcome recorded the request, and it does not make an unsolicited message to the same address allowed.
+- **Policy approval.** Owner only, needs a sender identity and a substantive note, creates a new version, is audited.
+- **Opt-out links.** Tampered or swapped tokens are rejected; a GET changes nothing; a POST suppresses once and is idempotent.
+- **Connecting Gmail.** Only `gmail.send` and `gmail.readonly` are requested. Refused: another organisation, a consumer account, a spoofed address suffix without the organisation claim, an unverified address, wrong audience, wrong issuer, expired token, wrong nonce, missing or reused state, a callback finished by a different user, missing read permission, no long-lived token, a member without the integration permission, and any workspace other than the configured internal one — including with the external flag switched on. The stored token is encrypted and absent from API responses and the audit log.
+- **Synchronisation.** The first sync is resumable and takes its cursor from before listing began; an incremental sync that dies mid-way keeps the pages already stored and re-reads the rest without duplicates; an expired cursor (404) falls back to a full sync; a notification with a far-future history ID does not move the cursor; duplicate and unknown-mailbox notifications are ignored; forged notifications are refused; lost notifications are recovered by the 15-minute check; one sync per mailbox; provider back-off is respected and shown.
+- **Watch renewal.** Never adopts the renewal's history ID; a failure within 24 hours of expiry raises a visible alert; retried within the hour.
+- **Withdrawn authorisation** is shown with a reconnect instruction; reconnecting keeps the cursor and history.
+- **Conversations.** Replies link by thread; an address shared by two companies or an unknown sender waits for a person; automatic replies do not count as replies; incoming HTML is stripped of scripts, handlers, forms, frames, styles and remote images; attachment bodies are never requested; a permanent bounce suppresses the address and a temporary one does not.
+- **Isolation.** Another workspace sees no mailboxes, threads, drafts or suppressions and cannot act on them by ID; a read-only member cannot draft or suppress.
+
+**Limitations:**
+
+- The Bulgarian policy is a draft based on an unofficial 2019 consolidation (U-06). The software enforces whatever the owner approves; it does not establish that the rules are correct.
+- The register format is one address per line. The real register's format and access terms are unknown.
+- The fake mailbox models Gmail's documented history behaviour; differences in the real service would only show at the live gate.
+- The frontend shows message text only; the sanitised HTML is stored but not rendered.

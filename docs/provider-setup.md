@@ -6,7 +6,7 @@ Configuration and verification instructions. No secrets belong in this file. Sta
 |---|---|---|---|
 | Local development OIDC (Dex 2.46) | Sign-in for development and tests only | VERIFIED_LOCALLY | — |
 | Production OIDC | Sign-in for hosted environments | BLOCKED | U-01 |
-| Google Workspace / Gmail (Internal app) | Manual send and reply tracking for SEWEB | NOT_STARTED | U-02 for live use |
+| Google Workspace / Gmail (Internal app) | Manual send and reply tracking for SEWEB | IMPLEMENTED (contract-tested against a mocked transport; never connected to a real mailbox) | U-02 for live use |
 | Google Places API | Business discovery | NOT_STARTED | U-04 for live use |
 | AI model provider | Score proposals and drafts | NOT_STARTED | U-03 for live use |
 | Stripe Billing (test mode) | Subscriptions | NOT_STARTED | U-08 |
@@ -60,3 +60,27 @@ Provider API keys are encrypted with AES-256-GCM before they are stored. The key
 A consumer chat subscription with an AI vendor does not include API access. An API key comes from the vendor's developer console and is billed separately.
 
 **Costs shown in the application** are either *confirmed by the provider* or *estimated here from list prices*. They are reported separately. An operation that timed out keeps its budget reserved until an owner checks the provider's records and resolves it.
+
+## Gmail (internal pilot)
+
+Only the organisation that owns the Google Cloud project may connect a mailbox. Nothing below has been done against a real Google account; the steps follow Google's documented flow and must be confirmed during the live gate.
+
+| Variable | Meaning |
+|---|---|
+| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` | OAuth client of an app whose user type is **Internal** in the SEWEB Workspace |
+| `GMAIL_INTERNAL_DOMAIN` | The Workspace domain. The `hd` claim of the signed identity token must equal it; an address suffix alone is not accepted |
+| `GMAIL_INTERNAL_TENANT_IDS` | Comma-separated workspace IDs allowed to use this app. Any other workspace is refused |
+| `GMAIL_PUBSUB_TOPIC` | Full topic name for mailbox notifications. Optional: without it replies are still collected every 15 minutes |
+| `GMAIL_PUSH_AUDIENCE`, `GMAIL_PUSH_SERVICE_ACCOUNT` | Audience and service account expected on the signed push request |
+| `MAILBOX_RECONCILE_MINUTES` | Timed check that recovers lost notifications (default 15) |
+| `EXTERNAL_GMAIL_ENABLED` | Leave `false`. External Gmail is not implemented (CRM-114) |
+
+Steps for the owner (U-02):
+
+1. In the Google Cloud project owned by the SEWEB organisation, set the OAuth consent screen user type to Internal.
+2. Create a web OAuth client with the redirect URI `<PUBLIC_BASE_URL>/api/v1/mailboxes/gmail/callback`.
+3. Enable the Gmail API. Requested scopes: `openid`, `email`, `gmail.send`, `gmail.readonly`. Mailbox modification is not requested.
+4. Optional: create a Pub/Sub topic, grant Gmail's push service account publish rights, and add a push subscription to `<PUBLIC_BASE_URL>/api/v1/webhooks/gmail` with OIDC authentication.
+5. Set the variables above, restart, and connect the mailbox under Integrations. The mailbox stays marked "not yet confirmed against a real mailbox" until the live gate is recorded.
+
+The refresh token is encrypted with the same keys as provider credentials. Attachments are never downloaded.

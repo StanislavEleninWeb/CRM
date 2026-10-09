@@ -79,11 +79,11 @@ Stable IDs from build-pack revision 2. States: `TODO`, `IN_PROGRESS`, `BLOCKED`,
 
 | ID | Deliverable | Acceptance | Status |
 |---|---|---|---|
-| CRM-080 | Internal Gmail OAuth | State validated; external organisations rejected | TODO |
-| CRM-081 | Manual draft, send request, thread | Sends stay dry-run until phase 09 | TODO |
-| CRM-082 | History sync | Cursor gaps, 404, dropped and reordered notifications handled | TODO |
-| CRM-083 | Watch renewal and recovery | Renewal failure alerts before expiry | TODO |
-| CRM-084 | Bulgarian eligibility policy | Unknown classification and stale register block unsolicited sends | TODO |
+| CRM-080 | Internal Gmail OAuth | State validated; external organisations rejected | DONE (stand-in Google; live connection BLOCKED U-02) |
+| CRM-081 | Manual draft, send request, thread | Sends stay dry-run until phase 09 | DONE for drafts and threads; no send path exists yet |
+| CRM-082 | History sync | Cursor gaps, 404, dropped and reordered notifications handled | DONE (fake mailbox) |
+| CRM-083 | Watch renewal and recovery | Renewal failure alerts before expiry | DONE (fake mailbox) |
+| CRM-084 | Bulgarian eligibility policy | Unknown classification and stale register block unsolicited sends | DONE; policy itself is a draft (U-06) |
 
 ## Phase 09 — reliable manual sends (P0, depends on 05, 08)
 

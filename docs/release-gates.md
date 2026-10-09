@@ -21,9 +21,9 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Budgets atomic under concurrency | PASS (20 threads on separate connections) |
 | Synthetic research run end to end | PASS (tests, and `infra/e2e/phase_b_research.py` through the real scheduler) |
 | Live research run | BLOCKED — provider, terms and budget (U-03, U-04) |
-| Gmail sync contract verified against a fake provider | NOT_STARTED |
+| Gmail sync contract verified against a fake provider | PASS (fake mailbox and mocked HTTP transport) |
 | Live internal Gmail connection | BLOCKED — mailbox and project ownership (U-02) |
-| Email eligibility enforced at send time | NOT_STARTED |
+| Email eligibility enforced at send time | NOT_STARTED — evaluated on every draft read (phase 08); the send path arrives in phase 09 |
 | Live unsolicited email | BLOCKED — policy approval (U-06) |
 | Due-row dispatcher: single claim, crash recovery, no blind resend | NOT_STARTED |
 
@@ -46,6 +46,6 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Scope list and data-flow documentation | NOT_STARTED |
 | Google verification for sensitive and restricted scopes | BLOCKED (U-09) |
 | Annual security assessment: quote, owner, validity date | BLOCKED (U-09) |
-| All onboarding paths reject external Gmail while the gate is closed | NOT_STARTED |
+| All onboarding paths reject external Gmail while the gate is closed | PASS for the connect and callback paths (phase 08); re-check when billing onboarding exists |
 
 The commercial core may launch with external Gmail disabled, provided that is clearly disclosed.
