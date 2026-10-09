@@ -97,3 +97,4 @@ jobs:
         run: ./infra/checks/smoke-remote.sh
         env:
           BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          ORIGIN_IP: ${{ vars.ORIGIN_IP }}

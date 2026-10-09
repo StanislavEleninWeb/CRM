@@ -18,6 +18,8 @@ Status values: **Confirmed** (the owner said so), **Default** (working default f
 | D-10 | Deployment through GitHub Actions over SSH; access supplied as environment variables and a secret | Owner, 9 Oct 2026 |
 | D-11 | Files and off-host backups on AWS S3 | Owner, 9 Oct 2026 |
 | D-12 | Sign-in through AWS Cognito | Owner, 9 Oct 2026 |
+| D-13 | `crm.seweb.co` stays behind Cloudflare's proxy: SSL mode Full (strict), a Cloudflare Origin Certificate on the server, Authenticated Origin Pulls so only Cloudflare can connect | Owner, 9 Oct 2026 |
+| D-14 | The server's ports 80 and 443 belong to the Hermes project's Caddy. For now it imports the CRM's site file; a separate proxy repository is optional and later | Owner raised it, 9 Oct 2026 |
 
 ## Defaults
 
