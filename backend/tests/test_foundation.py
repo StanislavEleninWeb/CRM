@@ -145,3 +145,23 @@ def test_beat_schedule_has_no_long_eta_jobs() -> None:
     schedule = celery_app.conf.beat_schedule
     assert list(schedule) == ["poll-due-rows"]
     assert schedule["poll-due-rows"]["schedule"] <= 3600
+
+
+def test_the_example_environment_file_is_a_working_configuration() -> None:
+    """CI and `make up` start from a copy of .env.example, so every line in it must load."""
+    from pathlib import Path
+
+    from app.core.config import Settings
+
+    example = Path("/repo/.env.example")
+    if not example.exists():
+        pytest.skip("the repository root is not mounted")
+    values = {}
+    for line in example.read_text().splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            name, value = line.split("=", 1)
+            values[name.strip().lower()] = value
+    known = {name: value for name, value in values.items() if name in Settings.model_fields}
+    settings = Settings(**known)
+    assert settings.email_dispatch == "off" and settings.billing_mode == "off"
+    assert settings.external_gmail_assessment_valid_until is None

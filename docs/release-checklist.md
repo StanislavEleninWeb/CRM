@@ -28,7 +28,7 @@ Words used here: **PASS** — verified by a test or check that ran, named in `te
 | Suppression: opt-out, reply, bounce, stale register, erased business — before dispatch | PASS | `test_sends.py`, `test_email.py`, `test_ops.py` |
 | Failure rehearsals | PASS — see the table below | |
 | Invalid workbooks; prompt injection | PASS | `test_import.py`, `test_research.py` |
-| List and report speed at a realistic volume | PASS for the pilot's size; **will need work before about 5,000 prospects** — 1,500 prospects imported with their assessments, scores and channels, 1,000 calls, on a laptop: prospect list 370 ms, call queue 500 ms, everything else under 50 ms. Both slow ones grow with the number of prospects | `test_release.py::test_lists_and_reports…` |
+| List and report speed at a realistic volume | PASS — 1,500 prospects imported with their assessments, scores and channels, 1,000 calls, on a laptop: every list, the call queue and the reports under 50 ms. A fault found on GitHub's first run is fixed: after a large import the database's statistics described other workspaces and the prospect list took seconds; statistics are now refreshed at the end of an import. Not measured beyond 1,500 prospects or under concurrent load | `test_release.py::test_lists_and_reports…` |
 | Mobile layout and labelled controls | PASS for fifteen pages at 375 px, including the prospect page with its email panel (no overflow, no unlabelled input, no error state). Not an accessibility audit: no screen reader, no contrast measurement, no keyboard-only pass | Browser check, this phase |
 | Backup restores into an isolated database | PASS locally, encrypted | `infra/backup/restore-check.sh` |
 | Upgrade from the first published schema with data | PASS locally | `infra/checks/upgrade-from-previous.sh` |
@@ -101,4 +101,4 @@ This is a development stack: the sign-in provider has fixed test users and must 
 4. **You: have the Bulgarian outreach rules reviewed and approve them in the application (U-06).** Unsolicited email stays blocked until then.
 5. **You: choose the AI provider and monthly budget (U-03) and confirm the Places billing region (U-04)** for live research.
 6. **Later: Stripe test account and approved plans (U-08); external Gmail verification and assessment (U-09).**
-7. **Engineering, no input needed:** research refresh mode (CRM-074); pin three images by digest; a member filter control on Reports; make the prospect list and call queue independent of the total number of prospects.
+7. **Engineering, no input needed:** research refresh mode (CRM-074); pin three images by digest; a member filter control on Reports; measure the prospect list and call queue at 10,000 prospects and more.

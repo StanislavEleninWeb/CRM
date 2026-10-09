@@ -458,9 +458,15 @@ def test_many_simultaneous_requests_from_two_workspaces_never_cross(
 
 
 def test_lists_and_reports_stay_quick_with_a_realistic_volume(
-    owner: TestClient, capsys: pytest.CaptureFixture[str]
+    owner: TestClient, other: TestClient, capsys: pytest.CaptureFixture[str], migrator_engine: Any
 ) -> None:
     tenant = UUID(ok(owner.get(f"{API}/tenant"))["id"])
+    # The hard case for the query planner, and an ordinary one in a shared database: its statistics
+    # describe another workspace's data, and then this workspace imports a large list. Believing this
+    # workspace to be almost empty, the planner would pick a plan that takes seconds.
+    import_and_commit(other, workbook_bytes([row(f"O-{n:03d}", f"Other {n}", 70) for n in range(40)]))
+    with migrator_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        conn.execute(text("ANALYZE"))
     # 1,500 prospects through the real importer, so each has its assessment, score, channels and findings:
     # those are the joins the prospect list and the call queue pay for.
     rows = [
@@ -502,5 +508,6 @@ def test_lists_and_reports_stay_quick_with_a_realistic_volume(
             "\nTIMINGS (ms, best of 3; 1,500 imported prospects with assessments, scores and channels; 1,000 calls): "
             + json.dumps(timings)
         )
-    slow = {label: ms for label, ms in timings.items() if ms > 1500}
+    # A wide margin: this runs on shared CI machines. The broken plan this guards against took 3,000 ms and more.
+    slow = {label: ms for label, ms in timings.items() if ms > 2000}
     assert slow == {}, slow

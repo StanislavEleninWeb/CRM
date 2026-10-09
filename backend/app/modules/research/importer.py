@@ -546,6 +546,13 @@ def _content_hash(data: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(relevant, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+ANALYZE_AFTER_ROWS = 50
+ANALYZED_TABLES = (
+    "companies, leads, lead_assessments, lead_scores, observations, hypotheses, contact_channels, "
+    "contact_restrictions, import_rows, taggings, tasks, call_attempts"
+)
+
+
 def commit_import(db: Session, tenant_id: UUID, import_id: UUID, actor_id: UUID | None) -> dict[str, Any]:
     """Apply a reviewed import. Runs inside the caller's transaction."""
     rubric_id, _ = active_rubric(db, tenant_id)
@@ -838,6 +845,10 @@ def commit_import(db: Session, tenant_id: UUID, import_id: UUID, actor_id: UUID 
 
     shortlist_id = _commit_shortlist(db, tenant_id, import_id, actor_id, lead_by_external, latest_check)
     summary = {**dict(result), "shortlist_id": str(shortlist_id) if shortlist_id else None}
+    if result["created"] + result["updated"] >= ANALYZE_AFTER_ROWS:
+        # Statistics are per table, not per workspace. After a large import they describe everyone else,
+        # and lists for this workspace would be planned as if it were nearly empty.
+        db.execute(text(f"ANALYZE {ANALYZED_TABLES}"))
     return summary
 
 

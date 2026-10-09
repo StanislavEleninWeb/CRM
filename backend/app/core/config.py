@@ -99,6 +99,12 @@ class Settings(BaseSettings):
         ZoneInfo(value)
         return value
 
+    @field_validator("external_gmail_assessment_valid_until", mode="before")
+    @classmethod
+    def _empty_date_is_unset(cls, value: object) -> object:
+        # An env file line with nothing after "=" means "not set", not an unreadable date.
+        return None if value == "" else value
+
     @field_validator("database_url", "migration_database_url")
     @classmethod
     def _postgres_only(cls, value: str | None) -> str | None:
