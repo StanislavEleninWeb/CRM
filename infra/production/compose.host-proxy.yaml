@@ -1,0 +1,8 @@
+# Use together with compose.yaml when the host already runs a reverse proxy on ports 80 and 443
+# (as 161.97.89.47 does). The bundled proxy is not started; the two application services are
+# published on the loopback interface only, for the host's own proxy to forward to.
+services:
+  api:
+    ports: ["127.0.0.1:${API_HOST_PORT:-18000}:8000"]
+  frontend:
+    ports: ["127.0.0.1:${FRONTEND_HOST_PORT:-18080}:8080"]

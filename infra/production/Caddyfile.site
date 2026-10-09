@@ -1,0 +1,30 @@
+# Site block for a Caddy that already runs on the host. Add it to that Caddy's configuration
+# (or import this file) and reload Caddy. It obtains and renews the certificate for the name itself.
+crm.seweb.co {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	# Monitoring figures are not served to the internet.
+	@ops path /ops/*
+	respond @ops 404
+
+	@api path /api/* /healthz /readyz
+	handle @api {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy 127.0.0.1:18000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:18080
+	}
+}

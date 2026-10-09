@@ -1,0 +1,10 @@
+# Copy to /etc/seweb-crm/deploy.conf on the host. Read by infra/deploy/deploy.sh.
+
+# 161.97.89.47 already runs Caddy on ports 80 and 443, so the bundled proxy is not started and the
+# application is published on the loopback interface for that Caddy (see Caddyfile.site).
+COMPOSE_EXTRA="-f /opt/seweb-crm/infra/production/compose.host-proxy.yaml"
+COMPOSE_PROFILES_ARGS=""
+START_PROXY=""
+
+# Encrypted backup to S3 before every schema change. Without it the deployment refuses to migrate.
+BACKUP_COMMAND="BACKUP_PASSPHRASE_FILE=/etc/seweb-crm/backup.pass BACKUP_S3_URI=s3://CHANGE-ME-backup-bucket/crm COMPOSE='docker compose -f /opt/seweb-crm/infra/production/compose.yaml' /opt/seweb-crm/infra/backup/backup-encrypted.sh /var/backups/seweb-crm"

@@ -9,7 +9,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core`; pull request StanislavEleninWeb/CRM#2 holds phases 00–08 (first commit); later commits are local until the owner asks for a push |
 | Last completed phase | 14. Phase 13 is prepared but not complete (see its row). Start from `release-checklist.md` |
-| Next action | See "The smallest next actions" in `release-checklist.md`. First: the owner decides whether to push phases 09–14 |
+| Next action | `docs/runbooks/production-setup.md`: the owner completes steps 1–6 (DNS, S3, Cognito, server, settings, GitHub environment), then the first deployment by tag |
 
 ## Phases
 

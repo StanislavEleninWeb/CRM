@@ -31,8 +31,9 @@ services:
     restart: unless-stopped
     ports: ["80:80", "443:443"]
     environment:
-      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST, for example crm.example.com}
-      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL for certificate notices}
+      # Needed only when this bundled proxy is used (profile "proxy"). Empty values make Caddy refuse to start.
+      PUBLIC_HOST: ${PUBLIC_HOST:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

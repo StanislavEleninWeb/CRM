@@ -12,6 +12,8 @@ set -eu
 
 : "${API_IMAGE:?API_IMAGE is required (an image reference with a digest)}"
 : "${FRONTEND_IMAGE:?FRONTEND_IMAGE is required (an image reference with a digest)}"
+# Host-specific choices (existing proxy or bundled one, backup command) live on the host, not in the pipeline.
+[ ! -f "${DEPLOY_CONF:-/etc/seweb-crm/deploy.conf}" ] || . "${DEPLOY_CONF:-/etc/seweb-crm/deploy.conf}"
 DIR="$(cd "$(dirname "$0")/../production" && pwd)"
 STATE_DIR="${STATE_DIR:-/var/lib/seweb-crm}"
 PROFILE_ARGS="${COMPOSE_PROFILES_ARGS:---profile proxy}"
