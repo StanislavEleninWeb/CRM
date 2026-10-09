@@ -69,7 +69,10 @@ export const goodStanding = {
 };
 
 /** Shown on every page, so every test would otherwise have to mock it. */
-const DEFAULT_ROUTES: Record<string, Handler> = { "GET /api/v1/entitlements": () => json(goodStanding) };
+const DEFAULT_ROUTES: Record<string, Handler> = {
+  "GET /api/v1/entitlements": () => json(goodStanding),
+  "GET /api/v1/workspace/attention": () => json({ generated_at: "2026-10-09T08:00:00Z", items: [] }),
+};
 
 export function deferred<T>() {
   let resolve!: (value: T) => void;

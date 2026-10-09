@@ -8,8 +8,8 @@ Resume from here after a context reset. Do not rerun completed phases.
 |---|---|
 | Build pack | Revision 2, 8 October 2026 |
 | Branch | `build/core`; pull request StanislavEleninWeb/CRM#2 holds phases 00–08 (first commit); later commits are local until the owner asks for a push |
-| Last completed phase | 11 (releases A and B implemented; B live gates blocked; commercial core in progress) |
-| Next action | Phase 12: daily workspace, funnel reporting, retention, export and deletion, support access |
+| Last completed phase | 12 (releases A and B implemented; B live gates blocked; commercial core in progress) |
+| Next action | Phase 13: production images and Compose, release pipeline, backups and restore check, runbooks. No hosting target exists (U-07): prepare and validate locally, deploy nothing |
 
 ## Phases
 
@@ -27,7 +27,7 @@ Resume from here after a context reset. Do not rerun completed phases.
 | 09 Reliable manual sends | DONE | see `git log` (`Phase 09`) | Sending is `off` by default. Verified with a fake mailbox only; no email has ever been sent |
 | 10 Public API, webhooks, Hermes | DONE | see `git log` (`Phase 10`) | Webhook delivery verified against a mocked receiver only |
 | 11 Subscriptions and entitlements | DONE except the Stripe sandbox run | see `git log` (`Phase 11`) | `BILLING_MODE=off` by default. Plans are labelled test plans; no price is approved (U-08). Stripe has never been contacted |
-| 12 Reporting and operational controls | TODO | — | |
+| 12 Reporting and operational controls | DONE with stated gaps | see `git log` (`Phase 12`) | Report filters beyond the period, security-log purge and the backup retention window are open |
 | 13 Staging and deployment pipeline | TODO | — | |
 | 14 Release evidence and handoff | TODO | — | |
 | 15 Deferred extensions | Not run implicitly | — | |
@@ -92,3 +92,6 @@ TypeScript is held at 6.0 because typescript-eslint 8.71 does not support TypeSc
 - Billing state changes only through `billing.service.sync`, which reads the provider. Event payloads and browser redirects are never applied.
 - A new countable resource gets an entry in `entitlements.LIMITS` and a `require_room` call where it is created.
 - `plans` is seeded by migration and is not cleared between tests.
+- A figure in a report is an entry in `reports.router.RECORDS` (the same query gives the count and the list behind it) plus a `Metric` with its definition. A rate goes through `_rate`, which returns "no data" for a zero denominator.
+- Anything that can create a company, lead or message from outside (import, research, mailbox) must ask `dataops.service.is_erased` first.
+- Support access is not a membership. `TenantContext.support` marks it; endpoints exposing communications call `ctx.require_communications()`.

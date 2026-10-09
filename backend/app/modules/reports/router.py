@@ -417,7 +417,7 @@ def attention(ctx: TenantContext = READ) -> AttentionOut:
          "SELECT d.title AS label FROM deals d JOIN pipeline_stages st ON st.tenant_id = d.tenant_id AND st.id = d.stage_id "
          "WHERE d.tenant_id = :tenant_id AND st.kind = 'open' AND d.updated_at < now() - make_interval(days => :stale) ORDER BY d.updated_at"),
         ("verifications", "Research findings to verify", "/verification",
-         "SELECT COALESCE(o.finding, 'finding') AS label FROM observations o WHERE o.tenant_id = :tenant_id AND o.verification_state = 'unverified' "
+         "SELECT left(o.text, 120) AS label FROM observations o WHERE o.tenant_id = :tenant_id AND o.verification_state = 'unverified' AND o.superseded_at IS NULL "
          "ORDER BY o.created_at"),
         ("drafts", "Email drafts waiting", "/email",
          "SELECT subject AS label FROM email_drafts WHERE tenant_id = :tenant_id AND status IN ('draft', 'approved') ORDER BY created_at"),

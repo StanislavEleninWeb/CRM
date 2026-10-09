@@ -422,3 +422,34 @@ What is covered:
 - Monthly counts use calendar months in the workspace time zone, not the billing period.
 - Tax, invoicing and account activation are not addressed and no compliance is claimed.
 - No platform-provided AI allowance exists; every plan's allowance is zero.
+
+## Phase 12 — 9 October 2026
+
+| Command | Result |
+|---|---|
+| `pytest` (reference workbook present) | 349 passed, 0 skipped |
+| `ruff`, `mypy app` | Clean |
+| Frontend `typecheck`, `lint`, `test`, `build` | Clean; 37 tests passed |
+
+What is covered:
+
+- **No data is not zero.** In an empty workspace the four rates have value "no data" with a zero denominator, while plain counts are zero. An inverted period and one longer than a year are refused.
+- **Totals reconcile with a fixture** inserted with known values: 3 qualified leads of 5; 7 dialler openings but 5 reported calls; connected-call rate 3 of 5 = 60%, never out of the openings; 1 follow-up permission; 3 follow-ups due and 2 done = 66.7%; 3 wins; won amounts as two lines (1500.00 EUR, 300.00 USD) with no total; research cost 4.00 per one qualified research lead. Each figure's record list has exactly as many entries as the figure.
+- **Day boundaries.** A call at 22:30 UTC on 31 October belongs to 1 November in Sofia and is counted there; a lead at 21:30 UTC stays on the 31st.
+- **Costs.** A reservation whose charge is unknown is listed apart with a note; with costs in two currencies no per-lead figure is produced.
+- **Isolation.** Another workspace sees zeros and an empty record list.
+- **Daily list.** Empty when nothing is due; a due follow-up and an unassigned qualified lead appear with examples and links; a task due next week and a new deal do not.
+- **Retention.** Bounds are enforced (the security log cannot go below a year); a change is audited; a manager cannot change it. The purge blanks the content of a 90-day-old message under a 60-day setting and keeps its subject line and the recent message; it removes old idempotency records and finished jobs; a second run does nothing. Every workspace has the daily job from creation.
+- **Erasure.** Refused for a representative, with a wrong name, and without a real reason. Afterwards the company, lead, draft, note, file row and stored file are gone; a do-not-email entry and hashed tombstones remain; neither the tombstones nor the audit log contain the name, domain or list number. Re-importing the same list skips it; so does a renumbered row with the same website and address; mail from its address is not stored while mail from another is; the same business in another workspace is unaffected.
+- **Export.** One file per kind of record plus a manifest; a stored provider credential and an API key are not anywhere in the archive; owner only; audited.
+- **Workspace deletion.** Owner only, name typed exactly, due in seven days. Run early: nothing is deleted. Cancelled: the job does nothing. When due: the workspace and all its rows are gone, the stored file is gone, its API key stops working, one deletion record remains, and another workspace is untouched.
+- **Support access.** Without a grant an outsider cannot open the workspace. Only the owner grants, to a registered non-member, for at most 72 hours with a reason. The grantee can read companies and reports and gets 403 on thirteen other things, including every write, email conversations, the security log, keys, credentials, billing, members and both exports. Starting access is logged once as actor type "support". Conversations become readable only under a grant that includes them. Access ends at expiry and on revocation; it is not a seat. A representative cannot read the security log.
+
+**Limitations:**
+
+- The only report filter is the period.
+- The security-log retention setting is stored but the purge does not act on it yet.
+- The backup retention window is undefined until hosting exists; re-applying erasures after a restore is manual.
+- Erasure removes mail by the business's recorded addresses. Mail from an address never recorded for it is not found.
+- "Stale" opportunities are those not updated for 14 days; the threshold is a constant.
+- Workspace deletion does not cancel a subscription or stop Gmail watches.

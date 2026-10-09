@@ -88,6 +88,7 @@ def upgrade() -> None:
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             tenant_id uuid NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
             grantee_user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            grantee_email citext NOT NULL,
             include_communications boolean NOT NULL DEFAULT false,
             reason text NOT NULL CHECK (length(btrim(reason)) BETWEEN 10 AND 500),
             granted_by uuid REFERENCES users (id) ON DELETE SET NULL,
@@ -141,6 +142,28 @@ def upgrade() -> None:
     )
     op.execute("REVOKE ALL ON FUNCTION user_id_by_email(text) FROM PUBLIC")
     op.execute("GRANT EXECUTE ON FUNCTION user_id_by_email(text) TO crm_app")
+    # Eligibility decisions are append-only for the application. Erasure on request is the one
+    # exception, and it can only remove the current tenant's rows for the named addresses.
+    op.execute(
+        """
+        CREATE FUNCTION eligibility_decisions_erase(p_addresses text[]) RETURNS integer
+        LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+        AS $$
+        DECLARE
+            v_count integer;
+        BEGIN
+            IF app_current_tenant() IS NULL THEN
+                RAISE EXCEPTION 'a tenant is required' USING ERRCODE = 'insufficient_privilege';
+            END IF;
+            DELETE FROM eligibility_decisions WHERE tenant_id = app_current_tenant() AND to_address = ANY(p_addresses::citext[]);
+            GET DIAGNOSTICS v_count = ROW_COUNT;
+            RETURN v_count;
+        END
+        $$
+        """
+    )
+    op.execute("REVOKE ALL ON FUNCTION eligibility_decisions_erase(text[]) FROM PUBLIC")
+    op.execute("GRANT EXECUTE ON FUNCTION eligibility_decisions_erase(text[]) TO crm_app")
     # Every workspace gets a daily retention job, in the database like every other schedule.
     op.execute(
         """
@@ -166,6 +189,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP FUNCTION IF EXISTS eligibility_decisions_erase(text[])")
     op.execute("DROP FUNCTION IF EXISTS user_id_by_email(text)")
     op.execute("DROP TRIGGER IF EXISTS tenants_schedule_retention ON tenants")
     op.execute("DROP FUNCTION IF EXISTS tenant_schedule_retention()")

@@ -267,9 +267,8 @@ class GrantIn(BaseModel):
 
 
 GRANT_SQL = (
-    "SELECT g.id, u.email::text AS grantee_email, g.include_communications, g.reason, g.created_at, g.expires_at, g.revoked_at, "
-    "g.first_used_at, (g.revoked_at IS NULL AND g.expires_at > now()) AS active FROM support_grants g JOIN users u ON u.id = g.grantee_user_id "
-    "WHERE g.tenant_id = :tenant_id"
+    "SELECT g.id, g.grantee_email::text AS grantee_email, g.include_communications, g.reason, g.created_at, g.expires_at, g.revoked_at, "
+    "g.first_used_at, (g.revoked_at IS NULL AND g.expires_at > now()) AS active FROM support_grants g WHERE g.tenant_id = :tenant_id"
 )
 
 
@@ -298,9 +297,10 @@ def create_grant(body: GrantIn, ctx: TenantContext = OWNER) -> GrantOut:
         raise ConflictError("That person is already a member of this workspace.")
     grant_id = scalar(
         ctx,
-        "INSERT INTO support_grants (tenant_id, grantee_user_id, include_communications, reason, granted_by, expires_at) "
-        "VALUES (:tenant_id, :g, :c, :r, :u, :e) RETURNING id",
+        "INSERT INTO support_grants (tenant_id, grantee_user_id, grantee_email, include_communications, reason, granted_by, expires_at) "
+        "VALUES (:tenant_id, :g, :mail, :c, :r, :u, :e) RETURNING id",
         {
+            "mail": email,
             "g": grantee,
             "c": body.include_communications,
             "r": body.reason.strip(),

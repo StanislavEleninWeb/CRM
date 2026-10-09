@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api, type Schemas, unwrap } from "../api/client";
 import { useAuth, useTenantQuery } from "../auth/AuthContext";
 import { ProspectCard } from "../components/ProspectBits";
+import { Attention } from "./ReportsPage";
 import { EmptyState, ErrorState, Loading } from "../components/States";
 import { formatDate } from "../lib/format";
 
@@ -27,6 +28,8 @@ export function TodayPage() {
           {queue.data ? ` · ${formatDate(queue.data.queue_date)} (${queue.data.timezone})` : ""}
         </span>
       </div>
+
+      <Attention />
 
       <section aria-labelledby="queue-heading">
         <h2 id="queue-heading">Call queue</h2>

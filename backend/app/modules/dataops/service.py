@@ -70,6 +70,12 @@ def is_erased(db: Session, tenant_id: UUID, candidates: list[tuple[str, str | No
     )
 
 
+def is_erased_for_test(tenant_id: UUID, candidates: list[tuple[str, str | None]]) -> bool:
+    """The same check with its own short session. Used by checks that have no session open."""
+    with session_scope(RlsContext(tenant_id=tenant_id)) as db:
+        return is_erased(db, tenant_id, candidates)
+
+
 def erase_company(
     db: Session, tenant_id: UUID, company_id: UUID, *, reason: str, erased_by: UUID | None
 ) -> dict[str, int]:
@@ -132,7 +138,7 @@ def erase_company(
                           "OR NOT EXISTS (SELECT 1 FROM email_messages m WHERE m.tenant_id = th.tenant_id AND m.thread_id = th.id))"),
         ("recipient records", "DELETE FROM recipient_profiles WHERE tenant_id = :t AND address = ANY(CAST(:emails AS citext[]))"),
         ("consents", "DELETE FROM email_consents WHERE tenant_id = :t AND address = ANY(CAST(:emails AS citext[]))"),
-        ("eligibility decisions", "DELETE FROM eligibility_decisions WHERE tenant_id = :t AND to_address = ANY(CAST(:emails AS citext[]))"),
+        ("eligibility decisions", "SELECT eligibility_decisions_erase(CAST(:emails AS text[]))"),
         ("company", "DELETE FROM companies WHERE tenant_id = :t AND id = :c"),
     ):  # fmt: skip
         counts[label] = db.execute(text(statement), {**scope, "emails": emails, "leads": lead_ids}).rowcount or 0  # type: ignore[attr-defined]

@@ -48,7 +48,11 @@ Each gate is `PASS`, `FAIL`, `BLOCKED` or `NOT_STARTED`. Evidence is in `test-ev
 | Billing lifecycle in Stripe test mode | BLOCKED — account and plans (U-08). Status: IMPLEMENTED, not VERIFIED_IN_SANDBOX |
 | Approved plans and prices; tax, invoicing and account activation | BLOCKED — owner decisions (U-08). Not claimed |
 | Entitlements enforced on the server, for API keys and in workers | PASS (local) |
-| Retention, export, deletion, support access | NOT_STARTED |
+| Report totals reconcile with a fixture; zero denominators shown as no data; time-zone day boundaries | PASS (local) |
+| Erased records do not return through import, research or the mailbox | PASS (local) |
+| Workspace export, and deletion after a cancellable waiting period | PASS (local) |
+| Support access: owner-granted, read-only, logged, expiring | PASS (local) |
+| Backup retention window defined; erasure re-applied after a restore | NOT_STARTED — needs the hosting target (U-07); documented as a manual procedure |
 | Images, pipeline, restore, rollback | NOT_STARTED |
 | Staging deployment | BLOCKED — no hosting target (U-07) |
 

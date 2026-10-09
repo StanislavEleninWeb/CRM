@@ -23,9 +23,11 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/tasks", label: "Tasks", permission: "crm.read" },
   { to: "/email", label: "Email", permission: "crm.read" },
   { to: "/import", label: "Import", permission: "import.run" },
+  { to: "/reports", label: "Reports", permission: "reports.read" },
   { to: "/integrations", label: "Integrations", permission: "reports.read" },
   { to: "/team", label: "Team", permission: "members.read" },
   { to: "/billing", label: "Billing", permission: "tenant.billing" },
+  { to: "/data", label: "Data and access", permission: "tenant.settings" },
   { to: "/account", label: "Account" },
 ];
 
