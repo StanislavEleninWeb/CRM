@@ -258,6 +258,7 @@ def list_configs(ctx: TenantContext = READ) -> list[ConfigOut]:
     tags=["research"],
 )
 def create_config(body: ConfigIn, ctx: TenantContext = RUN) -> ConfigOut:
+    ctx.require_person("Setting what a research run may search and spend")
     return _save_config(ctx, body, None)
 
 
@@ -265,6 +266,7 @@ def create_config(body: ConfigIn, ctx: TenantContext = RUN) -> ConfigOut:
     "/research-configs/{config_id}", response_model=ConfigOut, operation_id="updateResearchConfig", tags=["research"]
 )
 def update_config(config_id: UUID, body: ConfigIn, ctx: TenantContext = RUN) -> ConfigOut:
+    ctx.require_person("Changing what a research run may search and spend")
     exists(ctx, "research_configs", config_id, "The configuration")
     return _save_config(ctx, body, config_id)
 

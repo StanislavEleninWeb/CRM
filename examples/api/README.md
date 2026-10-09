@@ -29,7 +29,7 @@ Read the evidence behind one prospect (`crm.read`):
 curl -sS "$CRM_BASE_URL/api/v1/prospects/$LEAD_ID" -H "Authorization: Bearer $CRM_API_KEY"
 ```
 
-Start a research run within the limits of an existing configuration (`research.run`):
+Start a research run within the limits of an existing configuration (`research.run`). The configuration, with its cost and size limits, is created by a person; a key can start it but cannot create or change one:
 
 ```bash
 curl -sS -X POST "$CRM_BASE_URL/api/v1/research-configs/$CONFIG_ID/runs" \
@@ -59,9 +59,9 @@ curl -sS -X PATCH "$CRM_BASE_URL/api/v1/tasks/$TASK_ID" \
 |---|---|
 | Errors | Always `{"error": {"code", "message", "correlation_id"}}`. Quote the correlation ID when asking for help. |
 | Paging | List endpoints take `limit` (max 200) and `offset`, and return `items`, `total`, `limit`, `offset`. |
-| Idempotency | `Idempotency-Key` on POST, PUT, PATCH, DELETE made with a key. Same request: the first answer again, with `Idempotency-Replayed: true`. Different request: `422 idempotency_conflict`. Still running or outcome not recorded: `409 idempotency_in_progress` — read the current state; it is never run twice. |
+| Idempotency | `Idempotency-Key` on POST, PUT, PATCH, DELETE made with a key. Same request: the first answer again, with `Idempotency-Replayed: true`. Different request: `422 idempotency_conflict`. Still running, or it ended in a server error (`5xx`) or was never recorded: `409 idempotency_in_progress`. **A 5xx may have done the work**: read the current state, then use a new key only if it did not. A request with a key is never run twice. `401` and `429` are not recorded; retry them with the same key. |
 | Rate limit | Per key, per minute. `429` with `Retry-After`. |
-| Scopes | A key can hold: `crm.read`, `crm.write`, `research.review`, `research.run`, `outreach.draft`, `outreach.send`, `calls.log`, `reports.read`. Nothing else. It never exceeds what the person who created it may do. |
+| Scopes | A key can hold: `crm.read`, `crm.write`, `research.run`, `outreach.draft`, `outreach.send`, `reports.read`. Nothing else. It never exceeds what the person who created it may do. Decisions that record a person's judgement stay with people whatever the scopes: approving a message, classifying a recipient, recording consent, verifying or promoting research, qualifying a lead, lifting a contact restriction, matching a conversation, reporting a call, and creating or changing a research configuration. |
 | Tenant | Fixed by the key. A tenant named in a header, query or body is ignored or rejected. |
 
 ## Webhooks

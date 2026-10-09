@@ -80,11 +80,15 @@ if {"fake_discovery", "fake_model"} <= adapters:
     run = crm_api.start_research(config["id"])
     check(run["status"] in ("queued", "running") and crm_api.start_research(config["id"])["id"] == run["id"],
           "example 2: start one bounded research run; asking twice starts one")
-    try:
-        crm_api.call("PATCH", f"/research-configs/{config['id']}", body={"cost_cap": "1000"})
-        check(False, "a key cannot raise limits")
-    except crm_api.ApiError as exc:
-        check(exc.status in (403, 404, 405), "a key cannot raise the run's limits")
+    bigger = {"name": "API example", "country": "Bulgaria", "cities": ["Sofia"], "categories": ["hair salon"], "cost_cap": "1000",
+              "candidate_cap": 2000, "qualified_target": 2000}
+    for method, path in (("PUT", f"/research-configs/{config['id']}"), ("POST", "/research-configs")):
+        try:
+            crm_api.call(method, path, body=bigger)
+            check(False, "a key cannot set limits")
+        except crm_api.ApiError as exc:
+            check(exc.status == 403, f"a key cannot set a research run's limits ({method})")
+    check(ok(owner.get("/api/v1/research-configs"))[0]["cost_cap"] in ("1", "1.0000"), "the limit a person set is unchanged")
 
 reader = ok(owner.post("/api/v1/api-keys", json={"name": "Read only", "scopes": ["crm.read"]}), 201)
 os.environ["CRM_API_KEY"] = reader["key"]

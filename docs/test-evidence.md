@@ -349,22 +349,24 @@ What is covered:
 
 | Command | Result |
 |---|---|
-| `pytest` (reference workbook present) | 322 passed, 0 skipped |
+| `pytest` (reference workbook present) | 324 passed, 0 skipped |
 | `ruff`, `mypy app` | Clean |
 | Frontend `typecheck`, `lint`, `test`, `build` | Clean; 31 tests passed |
-| `docker compose exec api python /infra/e2e/phase_c_api.py` on a fresh stack | 16 checks passed: the documented examples over real HTTP with only an API key, synthetic records |
+| Migrations up, down to base, up again on a scratch database | Clean through revision 0010 |
+| `docker compose exec api python /infra/e2e/phase_c_api.py` on a fresh stack | 18 checks passed: the documented examples over real HTTP with only an API key, synthetic records |
 
 **No external system was contacted.** Webhook delivery was tested against a mocked receiver inside the test process and, for the address guard, against the real guarded network client with a controlled resolver. No delivery has been made to a real external server.
 
 What is covered:
 
 - **Keys.** Shown once; only a hash and a six-character prefix are stored; absent from lists and the audit log. A read-only key gets 403 on fifteen different writes and administrative reads, including sending, approving, key and webhook management, credentials, audit, sign-in details, creating a workspace, inviting an owner and changing settings.
-- **Scope ceiling.** Eight scopes can be granted. Ownership, membership, settings, billing, credentials, approval, audit, deletion and export are refused for any key. Only an administrator manages keys.
+- **Scope ceiling.** Six scopes can be granted: `crm.read`, `crm.write`, `research.run`, `outreach.draft`, `outreach.send`, `reports.read`. Ownership, membership, settings, billing, credentials, approval, audit, deletion, export, research review and call logging are refused for any key. Only an administrator manages keys.
+- **A person's decisions stay with people.** A key holding every grantable scope gets 403 on twenty-one actions: approving a message, classifying a recipient, recording consent, lifting a suppression, approving the rules, settling an uncertain send, matching a conversation, lifting a channel restriction, changing a verification, changing a lead's outreach status or qualification, verifying or promoting research, scoring, dismissing, creating or enlarging a research configuration, logging a call or its outcome, exporting, and deleting. (A review found the first version let a key classify recipients and match conversations; two scopes were withdrawn and the remaining decision endpoints now refuse keys.)
 - **Attribution.** Activities and audit entries written through a key say so and name the key.
 - **Lifecycle.** Malformed, altered, expired and revoked keys get 401. A key never exceeds its creator: demoting the creator removes write access; removing the creator stops the key.
 - **Tenant binding.** A tenant named in a header or query is ignored; in a body it is rejected. Another tenant cannot see or revoke the key.
 - **Rate limit.** Per key, per minute, with `Retry-After`; another key is unaffected.
-- **Idempotency.** The same request with the same key returns the first answer and creates one record. A different body, path or query with that key is `idempotency_conflict`. A refusal is replayed too. The key string is scoped to the API key. A request whose outcome was never recorded is refused, not rerun. Six simultaneous identical requests create one record.
+- **Idempotency.** The same request with the same key returns the first answer and creates one record. A different body, path or query with that key is `idempotency_conflict`. A refusal is replayed too. The key string is scoped to the API key. A rate-limit answer is not recorded, so the same key works after the wait. A request that ended in a server error, or whose outcome was never recorded, is refused afterwards, not rerun. Six simultaneous identical requests create one record.
 - **Webhook addresses.** Fourteen internal, credential-bearing, wrong-scheme and wrong-port addresses are refused; plain HTTP is refused outside development. A public name that resolves to an internal address is looked up and then not connected to.
 - **Signing.** The signature verifies with the right secret and fails for a changed body, a wrong secret, a missing or changed timestamp, and a stale delivery.
 - **Transactional events.** An event emitted in a transaction that rolls back leaves no event and no delivery. A call outcome reported through the API reaches the endpoints subscribed to it, with one event ID, and not a paused endpoint.
@@ -377,7 +379,8 @@ What is covered:
 
 - The rate limit is a fixed one-minute window per key; a burst across a minute boundary can reach twice the limit.
 - Idempotency records are not yet purged (planned with retention in phase 12).
-- If the server stops after doing the work but before recording the answer, that key answers `idempotency_in_progress` from then on; the client must read the state. This is the documented trade-off for never running a request twice.
+- After a server error, or if the server stops before recording the answer, that key answers `idempotency_in_progress` from then on; the client must read the state and use a new key if the work was not done. This is the documented trade-off for never running a request twice.
+- An API key cannot log calls. If an integration should record call outcomes later, they need their own source value so they are never counted as reported by a person.
 - The key-rotation script previously covered provider credentials only; it now also covers mailbox tokens and webhook secrets. Only the webhook part has its own test.
 - Event coverage is small: email sends, call outcomes, research run finished, and a test event.
 - No MCP server is provided; the build pack lists it as optional and later.

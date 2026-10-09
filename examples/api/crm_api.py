@@ -13,6 +13,7 @@ Things worth knowing:
   * A key cannot approve an email, change settings or members, or read stored credentials.
   * Send ``Idempotency-Key`` on anything that creates or changes data. Repeating the exact
     request returns the first answer; reusing the key for a different request is an error.
+    After a 5xx the same key answers 409: the work may have been done, so read the state first.
   * 429 means slow down; wait for the number of seconds in ``Retry-After``.
 """
 

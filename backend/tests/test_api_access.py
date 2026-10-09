@@ -3,7 +3,7 @@
 import json
 import threading
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -22,7 +22,8 @@ from tests.helpers import API, create_workspace, join, sign_in
 from tests.test_import import import_and_commit, lead_row, ok, workbook_bytes
 
 READ = ["crm.read", "reports.read"]
-WRITE = ["crm.read", "crm.write", "calls.log"]
+WRITE = ["crm.read", "crm.write"]
+EVERYTHING = ["crm.read", "crm.write", "research.run", "outreach.draft", "outreach.send", "reports.read"]
 
 
 @pytest.fixture
@@ -99,11 +100,9 @@ def test_a_key_is_shown_once_stored_as_a_hash_and_limited_to_its_scopes(
 
 def test_what_a_key_can_hold_is_capped(owner: TestClient, make_client: Any) -> None:
     scopes = {s["name"]: s["grantable"] for s in ok(owner.get(f"{API}/api-keys/scopes"))}
-    assert set(scopes) == {
-        "crm.read", "crm.write", "research.review", "research.run", "outreach.draft", "outreach.send", "calls.log", "reports.read",
-    }  # fmt: skip
+    assert set(scopes) == set(EVERYTHING)
     for forbidden in ("owners.manage", "members.manage", "tenant.settings", "tenant.billing", "integrations.manage",
-                      "outreach.approve", "audit.read", "crm.delete", "export.run", "everything"):  # fmt: skip
+                      "outreach.approve", "audit.read", "crm.delete", "export.run", "research.review", "calls.log", "everything"):  # fmt: skip
         refused = owner.post(f"{API}/api-keys", json={"name": "Too much", "scopes": ["crm.read", forbidden]})
         assert refused.status_code == 422 and "cannot be given to an API key" in refused.json()["error"]["message"]
     assert owner.post(f"{API}/api-keys", json={"name": "Nothing", "scopes": []}).status_code == 422
@@ -200,6 +199,91 @@ def test_a_key_is_rate_limited(owner: TestClient, make_client: Any) -> None:
     assert other.get(f"{API}/companies").status_code == 200  # each key has its own allowance
 
 
+def test_a_key_with_every_scope_still_cannot_make_a_persons_decisions(
+    owner: TestClient, tenant: UUID, make_client: Any
+) -> None:
+    import_and_commit(
+        owner,
+        workbook_bytes([lead_row("K-001", "Salon Aurora", **{"Public business email": "office@example-salon.bg"})]),
+    )
+    lead = ok(owner.get(f"{API}/leads"))["items"][0]
+    detail = ok(owner.get(f"{API}/prospects/{lead['id']}"))
+    phone = next(c for c in detail["channels"] if c["kind"] == "phone")
+    ok(
+        owner.patch(
+            f"{API}/channels/{phone['id']}",
+            json={"do_not_contact": True, "restriction_reason": "Asked not to be called"},
+        )
+    )
+    ok(owner.patch(f"{API}/leads/{lead['id']}", json={"outreach_status": "do_not_contact"}))
+    draft = ok(owner.post(f"{API}/email-drafts", json={"lead_id": lead["id"]}), 201)
+    config = {"name": "Big", "country": "Bulgaria", "cities": ["Sofia"], "categories": ["salon"], "cost_cap": "1000",
+              "candidate_cap": 2000, "qualified_target": 2000}  # fmt: skip
+    mine = ok(owner.post(f"{API}/research-configs", json={**config, "cost_cap": "1"}), 201)
+
+    agent = with_key(make_client, new_key(owner, EVERYTHING)["key"])
+    anything = str(tenant)
+    for method, path, body in (
+        # approving, and the judgements that make a message eligible
+        ("POST", f"/email-drafts/{draft['id']}/approve", {"review_note": "I am sure this is fine"}),
+        (
+            "PUT",
+            "/recipient-profiles",
+            {
+                "address": "office@example-salon.bg",
+                "legal_form": "legal_person",
+                "context": "business",
+                "evidence": "trust me",
+            },
+        ),
+        (
+            "POST",
+            "/email-consents",
+            {
+                "address": "office@example-salon.bg",
+                "kind": "opt_in",
+                "scope": "everything",
+                "source": "an agent says so",
+                "obtained_at": "2026-10-09T08:00:00Z",
+            },
+        ),
+        ("POST", f"/email-suppressions/{anything}/lift", {"lift_note": "they changed their mind"}),
+        ("POST", "/outreach-policy/approve", {}),
+        ("POST", f"/send-intents/{anything}/resolve", {"sent": True, "note": "it definitely went"}),
+        ("POST", f"/email-threads/{anything}/link", {"ignore": True}),
+        # loosening a contact restriction
+        ("PATCH", f"/channels/{phone['id']}", {"do_not_contact": False}),
+        ("PATCH", f"/channels/{phone['id']}", {"verification_state": "verified"}),
+        ("PATCH", f"/leads/{lead['id']}", {"outreach_status": "not_contacted"}),
+        ("PATCH", f"/leads/{lead['id']}", {"status": "qualified"}),
+        # research judgements and limits
+        ("POST", f"/observations/{anything}/verify", {"state": "verified"}),
+        ("POST", f"/research-candidates/{anything}/promote", {}),
+        ("POST", f"/leads/{lead['id']}/scores", {}),
+        ("POST", f"/prospects/{lead['id']}/dismiss", {"reason": "not a fit"}),
+        ("POST", "/research-configs", config),
+        ("PUT", f"/research-configs/{mine['id']}", config),
+        # saying what happened on a call
+        ("POST", f"/prospects/{lead['id']}/calls", {"channel_id": phone["id"]}),
+        ("POST", f"/calls/{anything}/outcome", {"outcome": "connected"}),
+        # data out in bulk, and deletion
+        ("GET", "/exports/prospects.xlsx", None),
+        ("DELETE", f"/companies/{lead['company_id']}", None),
+    ):
+        response = agent.request(method, f"{API}{path}", json=body)
+        assert response.status_code == 403, (method, path, response.status_code, response.text[:200])
+    after = ok(owner.get(f"{API}/prospects/{lead['id']}"))
+    assert next(c for c in after["channels"] if c["id"] == phone["id"])["do_not_contact"] is True
+    assert ok(owner.get(f"{API}/leads/{lead['id']}"))["outreach_status"] == "do_not_contact"
+    assert ok(owner.get(f"{API}/research-configs"))[0]["cost_cap"] in ("1", "1.0000")
+    assert ok(owner.get(f"{API}/email-drafts/{draft['id']}"))["status"] == "draft"
+    # What it can do: tighten, prepare, and start work inside limits a person set.
+    assert agent.patch(f"{API}/channels/{phone['id']}", json={"label": "Reception"}).status_code == 200
+    assert agent.post(f"{API}/email-suppressions", json={"value": "blocked@example.bg"}).status_code == 201
+    assert agent.patch(f"{API}/email-drafts/{draft['id']}", json={"subject": "A clearer subject"}).status_code == 200
+    assert agent.get(f"{API}/research-runs").status_code == 200
+
+
 # --- idempotency -----------------------------------------------------------------------------
 
 
@@ -241,6 +325,20 @@ def test_repeating_a_request_with_the_same_key_does_it_once(owner: TestClient, t
         == 401
     )
 
+    # "Not now" is not an answer to keep: after a rate limit the same key works.
+    slow = with_key(make_client, new_key(owner, WRITE, rate_limit_per_minute=1)["key"])
+    assert slow.get(f"{API}/companies").status_code == 200  # uses the minute's allowance
+    wait = {"Idempotency-Key": "after-the-limit"}
+    assert slow.post(f"{API}/companies", json={"name": "Later"}, headers=wait).status_code == 429
+    assert sql(tenant, "SELECT count(*) AS n FROM idempotency_keys WHERE key = 'after-the-limit'")[0]["n"] == 0
+    from app.core.deps import get_redis
+
+    for bucket in get_redis().scan_iter("crm:ratelimit:key:*"):
+        get_redis().delete(bucket)  # the next minute
+    later = slow.post(f"{API}/companies", json={"name": "Later"}, headers=wait)
+    assert later.status_code == 201 and "idempotency-replayed" not in later.headers
+    assert ok(owner.get(f"{API}/companies"))["total"] == 4
+
     # A request whose outcome was never recorded is refused, not run again.
     key_id = ok(owner.get(f"{API}/api-keys"))[-1]["id"]
     sql(
@@ -255,7 +353,36 @@ def test_repeating_a_request_with_the_same_key_does_it_once(owner: TestClient, t
     )
     lost = agent.post(f"{API}/companies", json={"name": "Second"}, headers={"Idempotency-Key": "lost"})
     assert lost.status_code == 409 and lost.json()["error"]["code"] == "idempotency_in_progress"
-    assert ok(owner.get(f"{API}/companies"))["total"] == 3
+    assert ok(owner.get(f"{API}/companies"))["total"] == 4
+
+
+def test_a_server_error_is_never_followed_by_a_second_execution(
+    owner: TestClient, tenant: UUID, make_client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.modules.crm import companies_router
+
+    company = ok(owner.post(f"{API}/companies", json={"name": "Acme"}), 201)
+    agent = with_key(make_client, new_key(owner, WRITE)["key"])
+    path, body = (
+        f"{API}/companies/{company['id']}/restrictions",
+        {"channel_kind": "email", "reason": "Asked for no email"},
+    )
+    headers = {"Idempotency-Key": "boom"}
+    calls: list[int] = []
+
+    def explode(*args: Any, **kwargs: Any) -> None:
+        calls.append(1)
+        raise RuntimeError("the server broke part-way through")
+
+    monkeypatch.setattr(companies_router, "record_audit", explode)
+    with pytest.raises(RuntimeError):  # the test client surfaces what a real client would see as a 500
+        agent.post(path, json=body, headers=headers)
+    assert len(calls) == 1
+    monkeypatch.undo()
+    again = agent.post(path, json=body, headers=headers)
+    assert again.status_code == 409 and again.json()["error"]["code"] == "idempotency_in_progress"
+    assert sql(tenant, "SELECT count(*) AS n FROM contact_restrictions")[0]["n"] == 0  # refused, not run again
+    assert agent.post(path, json=body, headers={"Idempotency-Key": "boom-after-checking"}).status_code == 201
 
 
 def test_simultaneous_identical_requests_create_one_record(owner: TestClient, make_client: Any) -> None:
@@ -566,4 +693,3 @@ def test_secret_rotation_covers_webhook_secrets(
     assert webhooks.verify(
         created["secret"], receiver.requests[0].headers["X-CRM-Signature"], receiver.requests[0].content
     )
-    assert timedelta(0) < timedelta(seconds=1)

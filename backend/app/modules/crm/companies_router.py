@@ -435,6 +435,8 @@ def create_channel(company_id: UUID, body: ChannelIn, ctx: TenantContext = WRITE
 
 @router.patch("/channels/{channel_id}", response_model=ChannelOut, operation_id="updateChannel")
 def update_channel(channel_id: UUID, body: ChannelUpdate, ctx: TenantContext = WRITE) -> ChannelOut:
+    if body.do_not_contact is False or body.verification_state is not None:
+        ctx.require_person("Lifting a contact restriction or changing a verification")
     current = one(
         ctx,
         "SELECT * FROM contact_channels WHERE tenant_id = :tenant_id AND id = :id FOR UPDATE",

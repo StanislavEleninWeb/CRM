@@ -4,9 +4,11 @@ A client that sends ``Idempotency-Key`` on a state-changing request gets the sam
 when it repeats that exact request, and an error when it reuses the key for a different
 one. The key is scoped to the tenant and API key.
 
-What this does not promise: if the server stops between doing the work and recording the
-answer, the record stays "in progress" and later attempts are refused rather than run
-again. The client then has to read the current state. Nothing is ever executed twice.
+What this does not promise: if the server stops, or answers with a server error, between
+doing the work and recording the answer, the record stays "in progress" and later attempts
+are refused rather than run again. The client then has to read the current state. A
+request with a key is never executed twice. Answers that say "not now" (rate limited, key
+not accepted) are not recorded, so the same key can be used when the cause has passed.
 """
 
 import hashlib
@@ -132,16 +134,13 @@ class IdempotencyMiddleware:
             await self.app(scope, replay_body, capture)
         finally:
             with session_scope(context) as db:
-                if captured["status"] >= 500 or len(captured["body"]) > MAX_STORED_RESPONSE:
-                    # Nothing was done (or the answer cannot be stored): allow the same key to be tried again.
-                    if captured["status"] >= 500:
-                        db.execute(
-                            text(
-                                "DELETE FROM idempotency_keys WHERE tenant_id = :t AND api_key_id = :k AND key = :key"
-                            ),
-                            params,
-                        )
-                else:
+                if captured["status"] in (401, 429):
+                    # Nothing was attempted: the same key may be used once the cause has passed.
+                    db.execute(
+                        text("DELETE FROM idempotency_keys WHERE tenant_id = :t AND api_key_id = :k AND key = :key"),
+                        params,
+                    )
+                elif captured["status"] < 500 and len(captured["body"]) <= MAX_STORED_RESPONSE:
                     db.execute(
                         text(
                             "UPDATE idempotency_keys SET state = 'completed', status_code = :s, response_body = :b, completed_at = now() "
@@ -149,6 +148,8 @@ class IdempotencyMiddleware:
                         ),
                         {**params, "s": captured["status"], "b": captured["body"].decode("utf-8", errors="replace")},
                     )
+                # A server error may or may not have done the work. The record stays "in progress",
+                # so a retry is refused instead of risking a second execution.
 
     @staticmethod
     async def _reply(send: Send, status: int, body: bytes, *, replayed: bool = False) -> None:

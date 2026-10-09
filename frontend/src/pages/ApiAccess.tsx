@@ -56,7 +56,16 @@ export function ApiKeys() {
         A key acts as you inside this workspace, limited to what you tick below. It can never approve an email, change settings or
         members, or read stored credentials.
       </p>
-      {fresh ? <ShownOnce label="New API key." value={fresh} onDone={() => setFresh(null)} /> : null}
+      {fresh ? (
+        <ShownOnce
+          label="New API key."
+          value={fresh}
+          onDone={() => {
+            setFresh(null);
+            create.reset(); // drop the answer that still holds the key
+          }}
+        />
+      ) : null}
       {keys.isPending ? (
         <Loading label="Loading keys" />
       ) : keys.isError ? (
@@ -193,7 +202,17 @@ export function Webhooks() {
         Events are sent to a public HTTPS address, signed with a secret. The same event can arrive more than once; the receiver
         should ignore an event ID it has already handled.
       </p>
-      {secret ? <ShownOnce label="Signing secret." value={secret} onDone={() => setSecret(null)} /> : null}
+      {secret ? (
+        <ShownOnce
+          label="Signing secret."
+          value={secret}
+          onDone={() => {
+            setSecret(null);
+            create.reset();
+            act.reset();
+          }}
+        />
+      ) : null}
       {endpoints.isPending ? (
         <Loading label="Loading webhooks" />
       ) : endpoints.isError ? (

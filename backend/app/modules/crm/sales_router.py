@@ -156,6 +156,8 @@ def get_lead(lead_id: UUID, ctx: TenantContext = READ) -> LeadOut:
 def update_lead(lead_id: UUID, body: LeadUpdate, ctx: TenantContext = WRITE) -> LeadOut:
     current = _lead(ctx, lead_id, lock=True)
     changes = body.model_dump(exclude_unset=True)
+    if "status" in changes or "outreach_status" in changes:
+        ctx.require_person("Qualifying a lead or changing its outreach status")
     if current["status"] == "converted" and "status" in changes:
         raise ConflictError("A converted lead keeps its status. Work on the deal instead.")
     if "owner_user_id" in changes and changes["owner_user_id"] != current["owner_user_id"]:

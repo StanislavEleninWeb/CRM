@@ -18,16 +18,16 @@ from app.modules.identity.permissions import Permission
 
 KEY_PREFIX = "crm_"
 # What a key can ever hold. Ownership, membership, settings, billing, stored credentials,
-# audit history, approvals, deletion and bulk export are for signed-in people only.
+# audit history, approvals, deletion and bulk export are for signed-in people only. So is
+# anything that records a person's judgement: verifying research, classifying a recipient,
+# promoting a candidate (research.review) and saying what happened on a call (calls.log).
 ALLOWED_SCOPES: frozenset[Permission] = frozenset(
     {
         Permission.CRM_READ,
         Permission.CRM_WRITE,
-        Permission.RESEARCH_REVIEW,
         Permission.RESEARCH_RUN,
         Permission.OUTREACH_DRAFT,
         Permission.OUTREACH_SEND,
-        Permission.CALLS_LOG,
         Permission.REPORTS_READ,
     }
 )

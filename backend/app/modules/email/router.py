@@ -612,6 +612,7 @@ def list_threads(
 )
 def link_thread(thread_id: UUID, body: LinkThread, ctx: TenantContext = tenant_with(Permission.CRM_WRITE)) -> ThreadOut:
     """A person decides which record an unmatched conversation belongs to, or that it belongs to none."""
+    ctx.require_person("Deciding which record a conversation belongs to")
     exists(ctx, "email_threads", thread_id, "The conversation")
     if body.ignore:
         execute(
@@ -1421,6 +1422,7 @@ def set_recipient_profile(
 @router.post("/email-consents", status_code=201, operation_id="recordEmailConsent", tags=["outreach rules"])
 def record_consent(body: ConsentIn, ctx: TenantContext = DRAFT) -> dict[str, Any]:
     """Record a request or consent with its scope. A request for one follow-up is not consent to campaigns."""
+    ctx.require_person("Recording a consent or request")
     address = normalize_email(body.address)
     if address is None:
         raise ValidationFailed("Enter a valid email address.")

@@ -55,6 +55,11 @@ class TenantContext:
     def user_id(self) -> UUID:
         return self.principal.user_id
 
+    def require_person(self, what: str) -> None:
+        """For decisions that record a person's judgement or loosen a restriction: never an API key."""
+        if self.principal.api_key_id is not None:
+            raise PermissionDeniedError(f"{what} needs a signed-in person, not an API key.")
+
     def require(self, permission: Permission) -> None:
         if permission not in self.permissions:
             raise PermissionDeniedError("You do not have permission to do this.")
