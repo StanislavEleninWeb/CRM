@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PLACEHOLDER_PREFIX = "change-me"
+PLACEHOLDER_PREFIX = "se"
 
 
 class Settings(BaseSettings):
