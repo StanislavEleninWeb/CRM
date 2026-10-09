@@ -65,13 +65,16 @@ class S3Storage:
             region_name=settings.s3_region,
             config=Config(
                 signature_version="s3v4",
-                s3={"addressing_style": "path"},
+                # A local S3 stand-in is addressed by path; AWS itself by bucket host name.
+                s3={"addressing_style": "path" if settings.s3_endpoint_url else "virtual"},
                 retries={"max_attempts": 3},
                 connect_timeout=5,
                 read_timeout=30,
             ),
         )
-        self._bucket_ready = False
+        # Only a local stand-in gets its bucket created on first use. A real bucket is created by its
+        # owner, and the application's credentials are not allowed to list or create buckets.
+        self._bucket_ready = not settings.s3_endpoint_url or settings.is_production_like
 
     def _ensure_bucket(self) -> None:
         if self._bucket_ready:

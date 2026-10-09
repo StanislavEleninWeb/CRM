@@ -15,6 +15,18 @@ printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
 printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" > ~/.ssh/known_hosts
 trap 'rm -f ~/.ssh/deploy' EXIT
 
-# The host keeps a checkout of infra/ at /opt/seweb-crm; only image references travel from here.
-ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=yes -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
-  "API_IMAGE='$API_IMAGE' FRONTEND_IMAGE='$FRONTEND_IMAGE' /opt/seweb-crm/infra/deploy/deploy.sh"
+SSH="ssh -i $HOME/.ssh/deploy -o StrictHostKeyChecking=yes -o BatchMode=yes $DEPLOY_USER@$DEPLOY_HOST"
+REMOTE_DIR="${REMOTE_DIR:-/opt/seweb-crm}"
+
+# The deployment files travel with the release, so the host needs no checkout of the repository.
+tar -C "$(dirname "$0")/../.." -czf - infra/production infra/deploy infra/postgres infra/backup infra/checks \
+  | $SSH "mkdir -p '$REMOTE_DIR' && tar -C '$REMOTE_DIR' -xzf -"
+
+# The host may pull these two images for the duration of this deployment only.
+if [ -n "${REGISTRY_TOKEN:-}" ]; then
+  printf '%s' "$REGISTRY_TOKEN" | $SSH "docker login ghcr.io --username '${REGISTRY_USER:-github}' --password-stdin >/dev/null"
+fi
+status=0
+$SSH "API_IMAGE='$API_IMAGE' FRONTEND_IMAGE='$FRONTEND_IMAGE' '$REMOTE_DIR/infra/deploy/deploy.sh'" || status=$?
+$SSH "docker logout ghcr.io >/dev/null 2>&1 || true"
+exit "$status"

@@ -1,12 +1,13 @@
 name: release
 
-# Build once, publish images under an immutable tag, deploy that exact digest to staging, check it,
-# then offer the same digest to production behind the repository's environment protection.
+# Build once, publish images under an immutable tag, then deploy that exact digest to production
+# behind the repository's environment protection, and check it from outside.
 #
-# What this file cannot do by itself, and what has to be configured in the repository settings:
-#   - Environments "staging" and "production", each with the variables and secrets named below.
-#   - Required reviewers on "production": without that rule the production job is not gated.
-# Until a host exists the deploy jobs skip themselves and say so.
+# There is one environment. What this file cannot do by itself, and what has to be configured in
+# the repository settings (docs/runbooks/production-setup.md):
+#   - Environment "production" with the variables and the secret named below.
+#   - Required reviewers on "production": without that rule a tag deploys with nobody approving.
+# With no host configured the deploy job skips itself and says so.
 
 on:
   push:
@@ -65,13 +66,17 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           SHA: ${{ github.sha }}
 
-  staging:
+  production:
+    # There is one environment. Waits for approval if the environment requires reviewers.
     needs: images
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    environment: staging
+    environment: production
+    permissions:
+      contents: read
+      packages: read
     concurrency:
-      group: deploy-staging
+      group: deploy-production
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,33 +91,8 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           API_IMAGE: ${{ needs.images.outputs.api }}
           FRONTEND_IMAGE: ${{ needs.images.outputs.frontend }}
-      - name: Smoke test
-        run: ./infra/checks/smoke-remote.sh
-        env:
-          BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
-
-  production:
-    # The same digests that passed staging. Waits for approval if the environment requires reviewers.
-    needs: [images, staging]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment: production
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Deploy the digests that passed staging
-        run: ./infra/deploy/remote.sh
-        env:
-          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
-          DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          API_IMAGE: ${{ needs.images.outputs.api }}
-          FRONTEND_IMAGE: ${{ needs.images.outputs.frontend }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Smoke test
         run: ./infra/checks/smoke-remote.sh
         env:

@@ -1,6 +1,6 @@
 # Deployment, migrations and rollback
 
-**State: prepared and validated locally. Nothing has been deployed; there is no hosting target (U-07).** What "validated locally" covered is listed in `docs/test-evidence.md` under phase 13.
+**State: prepared and validated locally. Nothing has been deployed.** The target is decided: see `production-setup.md` for the steps specific to `crm.seweb.co`. What "validated locally" covered is listed in `docs/test-evidence.md` under phase 13.
 
 ## What exists
 
@@ -24,7 +24,7 @@
 
 ## What a release does
 
-`checks` (the CI workflow) → `images` (build once, run the image checks, push under the commit SHA, output digests) → `staging` (deploy those digests, smoke test) → `production` (the same digests, after approval). Staging and production deployments are each serialised, so two releases cannot interleave.
+`checks` (the CI workflow) → `images` (build once, run the image checks, push under the commit SHA, output digests) → `production` (those digests, after approval, then a smoke test from outside). There is one environment and no staging, so a release is first exercised on the real system: keep the pre-migration backup and the rollback mode in mind. Deployments are serialised, so two releases cannot interleave.
 
 On the host, `deploy.sh`:
 

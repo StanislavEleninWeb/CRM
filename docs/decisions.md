@@ -14,6 +14,10 @@ Status values: **Confirmed** (the owner said so), **Default** (working default f
 | D-06 | Research uses the Google Places API first and a scraping provider later | Owner, 8 Oct 2026 |
 | D-07 | Schedules are PostgreSQL due rows; no multi-day Celery ETA tasks | Build pack rev 2 |
 | D-08 | Repository `StanislavEleninWeb/CRM` is public; real prospect data stays in ignored paths | Repository state |
+| D-09 | Hosting: one VPS, `161.97.89.47`, address `crm.seweb.co`, certificate notices to `management@seweb.co`. One environment, production; no separate staging | Owner, 9 Oct 2026 |
+| D-10 | Deployment through GitHub Actions over SSH; access supplied as environment variables and a secret | Owner, 9 Oct 2026 |
+| D-11 | Files and off-host backups on AWS S3 | Owner, 9 Oct 2026 |
+| D-12 | Sign-in through AWS Cognito | Owner, 9 Oct 2026 |
 
 ## Defaults
 
@@ -66,13 +70,13 @@ Working defaults, changeable by the owner. None of this is a price.
 
 | # | Choice | Blocks | Needed by |
 |---|---|---|---|
-| U-01 | Production identity (OIDC) provider | Production sign-in; MFA verification | Hosted pilot |
+| U-01 | ~~Production identity provider~~ Decided: AWS Cognito (D-12). Open: the user pool itself, and a first real sign-in | Production sign-in | Hosted pilot |
 | U-02 | Outreach mailbox address and confirmation that the Google Cloud project is owned by the SEWEB organization | Live Gmail connection | Phase 08 live gate |
 | U-03 | AI model provider, access mode, and monthly budget | Live research runs | Phase 07 live gate |
 | U-04 | Google Places API account billing region and applicable terms (see below) | Live discovery ingestion | Phase 07 live gate |
 | U-05 | Scraping provider and its source terms | Later research phase | After phase 07 |
 | U-06 | Bulgarian unsolicited-email policy: current statute text, sole-trader treatment, register access and freshness | Live unsolicited email | Phase 08 and 09 live gates |
-| U-07 | Hosting target and URL | Staging and production deployment | Phase 13 |
+| U-07 | ~~Hosting target and URL~~ Decided (D-09 to D-11). Open: DNS record, buckets and keys, server preparation, GitHub environment, how the server's existing Caddy is run | First deployment | Phase 13 |
 | U-08 | Stripe account, plan definitions and prices | Billing sandbox and live billing | Phase 11 |
 | U-09 | External Gmail verification and security-assessment quote | External tenants connecting Gmail | CRM-114 |
 | U-10 | Whether the discovery proposal and build pack may be committed to this public repository | Nothing; they are summarised in `approved-scope.md` | Owner preference |

@@ -32,6 +32,16 @@ openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass "file:$PASS_FILE" -in "$F
   || { echo "Backup failed: the encrypted file does not decrypt to the dump" >&2; rm -f "$FILE"; exit 1; }
 ( cd "$OUT_DIR" && { command -v sha256sum >/dev/null 2>&1 && sha256sum "crm-$STAMP.dump.enc" || shasum -a 256 "crm-$STAMP.dump.enc"; } > "crm-$STAMP.dump.enc.sha256" )
 
+# Off-host copy. Without it a backup protects against mistakes, not against losing the server.
+# The bucket's lifecycle rule removes old copies; credentials come from /etc/seweb-crm/backup-aws.env
+# (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION) and may only write to that bucket.
+if [ -n "${BACKUP_S3_URI:-}" ]; then
+  docker run --rm --env-file "${BACKUP_AWS_ENV_FILE:-/etc/seweb-crm/backup-aws.env}" -v "$(cd "$OUT_DIR" && pwd):/backup:ro" \
+    "${AWS_CLI_IMAGE:-amazon/aws-cli:2.31.10}" s3 cp --only-show-errors --sse AES256 --recursive --exclude '*' \
+    --include "crm-$STAMP.dump.enc" --include "crm-$STAMP.dump.enc.sha256" /backup "$BACKUP_S3_URI/" \
+    || { echo "Backup failed: the off-host copy could not be made" >&2; exit 1; }
+fi
+
 # Retention: this is the window during which deleted or erased records remain recoverable.
 find "$OUT_DIR" -name 'crm-*.dump.enc*' -type f -mtime "+$RETENTION_DAYS" -exec rm -f {} +
 echo "$FILE"
