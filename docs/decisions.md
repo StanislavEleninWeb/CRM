@@ -14,12 +14,12 @@ Status values: **Confirmed** (the owner said so), **Default** (working default f
 | D-06 | Research uses the Google Places API first and a scraping provider later | Owner, 8 Oct 2026 |
 | D-07 | Schedules are PostgreSQL due rows; no multi-day Celery ETA tasks | Build pack rev 2 |
 | D-08 | Repository `StanislavEleninWeb/CRM` is public; real prospect data stays in ignored paths | Repository state |
-| D-09 | Hosting: one VPS, `161.97.89.47`, address `crm.seweb.co`, certificate notices to `management@seweb.co`. One environment, production; no separate staging | Owner, 9 Oct 2026 |
+| D-09 | Hosting: one VPS, `164.68.126.141`, address `crm.seweb.co`, certificate notices to `management@seweb.co`. One environment, production; no separate staging | Owner, 9 Oct 2026 |
 | D-10 | Deployment through GitHub Actions over SSH; access supplied as environment variables and a secret | Owner, 9 Oct 2026 |
 | D-11 | Files and off-host backups on AWS S3 | Owner, 9 Oct 2026 |
 | D-12 | Sign-in through AWS Cognito | Owner, 9 Oct 2026 |
 | D-13 | `crm.seweb.co` stays behind Cloudflare's proxy: SSL mode Full (strict), a Cloudflare Origin Certificate on the server, Authenticated Origin Pulls so only Cloudflare can connect | Owner, 9 Oct 2026 |
-| D-14 | The server gets one shared reverse proxy in its own repository (`StanislavEleninWeb/caddy`), because more projects will follow. Each project joins the `edge` Docker network and installs one site file. The Caddy currently inside the Hermes stack is replaced by it | Owner, 10 Oct 2026 |
+| D-14 | The CRM server (`164.68.126.141`) already runs Apache for other projects. Apache stays as the reverse proxy and the CRM is one more virtual host. The shared Caddy proxy repository (`StanislavEleninWeb/caddy`) is not used on this server; it remains for another server or a later move off Apache. Hermes and its Caddy are on a different server and are not affected | Owner, 10 Oct 2026 |
 | D-15 | AWS region `eu-central-1`; AWS resources are managed with Terraform (`infra/terraform/`) | Owner, 10 Oct 2026 |
 
 ## Defaults

@@ -87,3 +87,5 @@ jobs:
         run: test "$(docker run --rm crm-api:ci id -u)" != "0"
       - name: Images contain no secrets, tests or source maps
         run: ./infra/checks/image-checks.sh crm-api:ci crm-frontend:ci
+      - name: The Apache virtual host does what the setup guide says
+        run: ./infra/checks/apache-vhost-test.sh

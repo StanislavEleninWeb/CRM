@@ -1,5 +1,6 @@
-# Used on the production server together with compose.yaml. The server has one shared reverse proxy
-# in a container (https://github.com/StanislavEleninWeb/caddy). It and this application share one
+# NOT used on the current production server, which runs Apache (see compose.host-proxy.yaml).
+# For a server whose reverse proxy is the shared Caddy container
+# (https://github.com/StanislavEleninWeb/caddy), use this file instead of compose.host-proxy.yaml. It and this application share one
 # Docker network, created once on the host:   docker network create edge
 # The proxy forwards to crm-api:8000 and crm-frontend:8080. No port of this application is published.
 services:

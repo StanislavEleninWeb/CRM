@@ -1,4 +1,5 @@
-# Site file for crm.seweb.co, installed into the server's shared proxy
+# NOT used on the current production server, which runs Apache (see apache-crm.seweb.co.conf).
+# Site file for crm.seweb.co on a server that uses the shared Caddy proxy, installed into it
 # (https://github.com/StanislavEleninWeb/caddy) by the deployment:  edge-site install crm <this file>
 #
 # The name is proxied by Cloudflare, so:

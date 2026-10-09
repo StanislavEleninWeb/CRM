@@ -1,11 +1,11 @@
 # Copy to /etc/seweb-crm/deploy.conf on the host. Read by infra/deploy/deploy.sh.
 
-# The server has one shared reverse proxy (the "edge" stack). This application joins its Docker
-# network, publishes no ports, and installs its own site file into the proxy after each deployment.
-COMPOSE_EXTRA="-f /opt/seweb-crm/infra/production/compose.shared-network.yaml"
+# The server (164.68.126.141) already runs Apache for other projects. The CRM starts no proxy of its
+# own: its two services listen on the loopback interface, and Apache forwards to them
+# (infra/production/apache-crm.seweb.co.conf, installed once by hand).
+COMPOSE_EXTRA="-f /opt/seweb-crm/infra/production/compose.host-proxy.yaml"
 COMPOSE_PROFILES_ARGS=""
 START_PROXY=""
-EDGE_SITE_NAME="crm"
 
 # Encrypted backup to S3 before every schema change. Without it the deployment refuses to migrate.
 BACKUP_COMMAND="BACKUP_PASSPHRASE_FILE=/etc/seweb-crm/backup.pass BACKUP_S3_URI=s3://CHANGE-ME-backup-bucket/crm COMPOSE='docker compose -f /opt/seweb-crm/infra/production/compose.yaml' /opt/seweb-crm/infra/backup/backup-encrypted.sh /var/backups/seweb-crm"

@@ -1,13 +1,13 @@
 # Production setup: crm.seweb.co
 
-Decided on 9 and 10 October 2026: one environment (production) on the VPS `161.97.89.47`, deployed by GitHub Actions, behind Cloudflare, files and backups on AWS S3 and sign-in through AWS Cognito (both in `eu-central-1`, managed with Terraform), a shared reverse proxy in its own repository, certificate notices to `management@seweb.co`.
+Decided on 9 and 10 October 2026: one environment (production) on the VPS `164.68.126.141`, deployed by GitHub Actions, behind Cloudflare, files and backups on AWS S3 and sign-in through AWS Cognito (both in `eu-central-1`, managed with Terraform), Apache on the server as the reverse proxy, certificate notices to `management@seweb.co`.
 
 **State: prepared. Nothing below has been done yet, and nothing has been deployed.** Each step says who does it. Secrets are typed on the server or into GitHub; they are never put in the repository or sent in chat.
 
 Found by looking from outside, 9 October 2026:
 
 - `crm.seweb.co` has **no DNS record** yet.
-- The server **already runs Caddy on ports 80 and 443**, in a container that is part of the Hermes stack. Decided on 10 October: that proxy moves into its own repository and serves every project (step 3). The CRM publishes no ports; it joins the proxy's Docker network.
+- The server (`164.68.126.141`; an earlier address given was the Hermes server) **already runs Apache 2.4 on ports 80 and 443** for other projects, and an nginx answers on port 8080. Decided on 10 October: Apache stays, and the CRM is added to it as one more virtual host (step 3). The CRM listens on the loopback interface only.
 
 ## 1. DNS and Cloudflare — you
 
@@ -22,7 +22,7 @@ Done on 9 October: `crm.seweb.co` exists and is **proxied by Cloudflare** (it re
 | Scrape Shield | **Email Address Obfuscation: off** for this name | It rewrites pages; a CRM shows many addresses |
 | Speed → Optimization | **Rocket Loader: off** for this name | It rewrites scripts |
 
-Download Cloudflare's origin-pull CA certificate (Cloudflare's documentation for Authenticated Origin Pulls links to it) and save it as `cloudflare-origin-pull-ca.pem`. The three files go on the server in step 4, under `/etc/edge/certs/crm/`.
+Download Cloudflare's origin-pull CA certificate (Cloudflare's documentation for Authenticated Origin Pulls links to it) and save it as `cloudflare-origin-pull-ca.pem`. The three files go on the server in step 3, under `/etc/seweb-crm/edge/`.
 
 What Cloudflare changes for the application: the server never sees the visitor's address directly, so the proxy passes on the one Cloudflare reports; uploads are limited by Cloudflare's plan (100 MB on the free plan, above this application's 25 MB); API answers are marked "do not store", so Cloudflare does not cache them. Opt-out links and provider callbacks go through Cloudflare like everything else: **do not put a challenge or bot rule on `/api/v1/unsubscribe/*` or `/api/v1/webhooks/*`**, or mail clients and providers will be blocked.
 
@@ -44,21 +44,45 @@ What to know about Cognito with this application:
 - Cognito does not say in the sign-in token whether a second factor was used. The account page will therefore show "two-step verification: not reported". Enforcement is the user pool's setting, which the Terraform sets to required.
 - Signing out of the application ends the application's session. It does not end the Cognito browser session, so "sign in" straight afterwards may not ask for the password again.
 
-## 3. The shared proxy — you, once per server
+## 3. Apache — you, once
 
-Ports 80 and 443 on the server are currently held by the Caddy inside the Hermes stack. They move to a proxy of their own, in its own repository: <https://github.com/StanislavEleninWeb/caddy>. Each project then joins the shared Docker network `edge` and installs one site file; deploying a project never restarts the proxy, and a broken site file is refused instead of taking the others down.
+The server already runs Apache for other projects, and it stays (decided 10 October). The CRM gets one more virtual host; nothing about the other sites changes.
 
-- Installing the proxy and taking the ports over from Hermes is described in that repository (`README.md`, `docs/migrating-hermes.md`). **It has not been done, and it needs a small change in the Hermes repository** (the agents join the `edge` network, the `caddy` service is removed, the site block moves to a site file). The switch-over interrupts the agent dashboards for about a minute.
-- The CRM cannot go live before this is done: it publishes no ports of its own.
+1. Put the three Cloudflare files from step 1 in `/etc/seweb-crm/edge/`: `origin.pem`, `origin.key` (mode 0600, owner root) and `cloudflare-origin-pull-ca.pem`.
+2. Install the virtual host:
+
+   ```bash
+   sudo cp /opt/seweb-crm/infra/production/apache-crm.seweb.co.conf /etc/apache2/sites-available/crm.seweb.co.conf
+   ```
+
+   ```bash
+   sudo a2enmod ssl proxy proxy_http headers rewrite && sudo a2ensite crm.seweb.co
+   ```
+
+   ```bash
+   sudo apache2ctl configtest
+   ```
+
+   Only if that says `Syntax OK`:
+
+   ```bash
+   sudo systemctl reload apache2
+   ```
+
+   A reload does not drop the other sites' connections. `a2enmod` only switches on modules that are off; if it enables `ssl` or `proxy` for the first time it asks for a restart instead of a reload, which interrupts all sites for a second.
+3. Check that ports `18000` and `18080` are not used by anything else on the server: `sudo ss -ltnp | grep -E ':(18000|18080)\s'` should print nothing before the first deployment.
+
+Until the CRM is deployed, the new site answers 503 through Cloudflare. That is expected.
+
+What the virtual host does: redirects port 80 to HTTPS; serves the Cloudflare origin certificate and requires Cloudflare's client certificate; forwards `/api/`, `/healthz` and `/readyz` to the API on `127.0.0.1:18000` and everything else to the pages on `127.0.0.1:18080`; answers 404 for `/ops/`; refuses a request that declares more than 25 MB before forwarding any of it; passes on the visitor's address as Cloudflare reports it.
+
+The separate proxy repository (<https://github.com/StanislavEleninWeb/caddy>) is **not used on this server**. It stays available for a future server, or for the day the other projects here move off Apache.
 
 ## 4. The server — you (I can give exact commands for each line)
 
-1. A user for deployments, e.g. `deploy`, in the `docker` group, allowed to write `/etc/edge/sites` (the site installer runs as this user). Docker Engine with the Compose plugin.
+1. A user for deployments, e.g. `deploy`, in the `docker` group. Docker Engine with the Compose plugin. The deployment never touches Apache.
 2. Directories: `/opt/seweb-crm` (owned by `deploy`), `/etc/seweb-crm` (mode 0700), `/var/backups/seweb-crm`, `/var/lib/seweb-crm`.
 3. An SSH key pair for deployments: public half in `~deploy/.ssh/authorized_keys`, private half into GitHub (step 6).
-4. The three Cloudflare files from step 1 in `/etc/edge/certs/crm/`: `origin.pem`, `origin.key`, `cloudflare-origin-pull-ca.pem`. The proxy container reads them as root; keep the key mode 0600.
-
-The CRM's deployment then does the rest by itself: it joins the `edge` network and runs `edge-site install crm …` with the site file from this repository.
 
 ## 5. Settings files on the server — you type the secrets
 
@@ -69,7 +93,7 @@ All in `/etc/seweb-crm/`, mode 0600. Templates are in `infra/production/`.
 | `env` | `env.example` | Public address, database URL for the runtime role, session secret, encryption key, erasure key, monitoring token; from `terraform output`: Cognito issuer, client and secret, S3 region and bucket; the application user's access key |
 | `db.env` | `db.env.example` | Database name and the three database passwords |
 | `migrate.env` | `migrate.env.example` | The schema owner's database URL. Read only by the migration job |
-| `deploy.conf` | `deploy.conf.example` | That the shared proxy is used; the backup command with the backups bucket (`terraform output backups_uri`) |
+| `deploy.conf` | `deploy.conf.example` | That Apache on the host is the proxy; the backup command with the backups bucket (`terraform output backups_uri`) |
 | `backup.pass` | — | `openssl rand -base64 32 > backup.pass`. **Keep a copy somewhere else**: without it backups cannot be read |
 | `backup-aws.env` | — | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` of the backup user |
 
@@ -83,11 +107,11 @@ Repository → Settings → Environments → **production**:
 
 | Kind | Name | Value |
 |---|---|---|
-| Variable | `DEPLOY_HOST` | `161.97.89.47` |
+| Variable | `DEPLOY_HOST` | `164.68.126.141` |
 | Variable | `DEPLOY_USER` | `deploy` |
-| Variable | `DEPLOY_HOST_KEY` | The server's public host key line, from `ssh-keyscan -t ed25519 161.97.89.47` (the part after the address). Compare it with the key shown on the server itself: `cat /etc/ssh/ssh_host_ed25519_key.pub` |
+| Variable | `DEPLOY_HOST_KEY` | The server's public host key line, from `ssh-keyscan -t ed25519 164.68.126.141` (the part after the address). Compare it with the key shown on the server itself: `cat /etc/ssh/ssh_host_ed25519_key.pub` |
 | Variable | `PUBLIC_BASE_URL` | `https://crm.seweb.co` |
-| Variable | `ORIGIN_IP` | `161.97.89.47` — lets the smoke test confirm the server refuses connections that bypass Cloudflare |
+| Variable | `ORIGIN_IP` | `164.68.126.141` — lets the smoke test confirm the server refuses connections that bypass Cloudflare |
 | Secret | `DEPLOY_SSH_KEY` | The private half of the deployment key |
 
 Also on that environment: **Required reviewers → yourself.** Without this rule, pushing a version tag deploys with nobody approving. And under Settings → Actions → General, workflow permissions can stay read-only; the release workflow asks for what it needs.
@@ -104,8 +128,9 @@ After that I rehearse a restore from the S3 backup and a rollback to the previou
 
 - **Images are private.** The deployment logs in with the workflow's own token, so nothing needs setting; if the pull is refused, the package's access list in GitHub needs the repository added.
 - **Cognito redirect mismatch**: the callback URL must match exactly, including `https` and no trailing slash.
-- **The deployment stops at "Install this application's site file"**: the shared proxy is not installed yet (step 3), or the three certificate files are missing from `/etc/edge/certs/crm/`. The application itself is already running at that point; only its public route is missing. Fix the cause and run the deployment again.
+- **Apache refuses to reload:** `apache2ctl configtest` names the line. The usual causes are a certificate file that is missing or unreadable, or a module that is not enabled.
+- **Ports 18000 or 18080 are taken:** the deployment fails when starting the services. Set `API_HOST_PORT` and `FRONTEND_HOST_PORT` in `/etc/seweb-crm/deploy.conf` to free ports and change the same two numbers in the virtual host.
 - **Cloudflare shows error 525 or 526:** the origin certificate is missing, unreadable, or for another name, or the SSL mode is not "Full (strict)".
-- **Cloudflare shows error 520/502 and Caddy logs a TLS handshake failure:** Authenticated Origin Pulls is off in Cloudflare while the server requires it (or the CA file is wrong).
-- **A direct visit to `https://161.97.89.47` fails:** intended. Only Cloudflare can connect.
+- **Cloudflare shows error 520/502 and Apache logs a TLS handshake failure:** Authenticated Origin Pulls is off in Cloudflare while the server requires it (or the CA file is wrong).
+- **A direct visit to `https://164.68.126.141` fails:** intended. Only Cloudflare can connect.
 - **The first backup fails** if `backup-aws.env` or the bucket name in `deploy.conf` is wrong. The deployment then stops before changing anything, by design.
